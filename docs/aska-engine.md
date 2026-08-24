@@ -252,6 +252,60 @@ That vocabulary describes the renderer: Blinn shading, spherical-harmonic
 ambient (`cvSHAmbContext`), light masking, cascaded shadow projection, and cube
 projectors.
 
+### Where 70 of them sit
+
+Session 7 pinned down the largest single block of them. The `0x16000` bytes at
+the start of each `ud1.bin`, before the first archive — the last gap in all
+four containers that nothing had explained — are mostly the shader library:
+
+| Range | Size | What |
+| --- | ---: | --- |
+| `0x00000`–`0x07717` | 30 488 | A table, still unidentified |
+| `0x07718`–`0x14803` | 53 484 | 70 compiled shaders: 60 pixel, 10 vertex |
+| `0x14804`–`0x15FFF` | 6 140 | Zero padding |
+
+The shader half is **byte-identical on both discs**, as a fixed engine asset
+should be. The 30 KB before it is not: it differs between the two, though 51 %
+of its `0x100`-byte blocks are still shared verbatim, it holds nothing that
+points into the shader area, and it reads as a table of 32-bit values whose
+columns repeat every `0x100` bytes. What it is remains open.
+
+### What the constant names say the renderer does
+
+Reading the constant tables of those 70 shaders adds a good deal to the
+vocabulary above. Names are recovered by scanning, so a few come out clipped or
+run together where the tables abut.
+
+* **Tone mapping and post**: `cvReinhardWhite` — Reinhard tone mapping, with
+  its white point exposed — alongside `cvBloomBlend`, `cvBias`, `cvGatherBlend`
+  and `cvDitther`, the last spelt that way in the shipped data.
+* **Depth of field**: `cavDOF`, in nine shaders, sampled through `poissonTb`, a
+  Poisson-disc kernel.
+* **Sky and sun**: `cvSunDir`, `cvSunCol`, `cvZenithDir`.
+* **Water simulated on the GPU**: `heightSampler` and `prevHeightSampler` — two
+  successive height fields, which is a wave equation integrated in a pixel
+  shader — with `cvWaveParams`, `cvGridSize`, and then `cvExportAddr` and
+  `cvExportNormal`. An export address is the Xbox 360's memexport, so the
+  simulation writes its results and the normals it derives straight back to
+  memory for the geometry pass to read.
+* **Video**: `YTexture`, `UTexture`, `VTexture` — the YUV conversion for the
+  WMV streams that occupy 3.2 GB of the four containers.
+* **Effects**: `SpriteAnimTex`, `ImageTexture`, `ParamTexture`, and
+  `eKamaitachiAnim`, named for the kamaitachi of Japanese folklore — the
+  sickle-weasel whose wind attack the effect presumably draws.
+
+### Reproducing
+
+```
+python - <<'EOF'
+import re
+f = open("disc1.iso", "rb"); f.seek(1703536640)
+d = f.read(0x16000)[0x7718:0x14804]
+print(d.count(b"ps_3_0"), "pixel,", d.count(b"vs_3_0"), "vertex shaders")
+print(sorted({m.group().decode() for m in re.finditer(rb"c[vma][A-Z][A-Za-z0-9_]+", d)}))
+EOF
+```
+
 ### AHSL
 
 Three strings point at a shading-language layer of tri-Ace's own:

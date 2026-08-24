@@ -151,13 +151,14 @@ size fields is consistent with an LZ variant over game data.
 
 ## 7. Open questions
 
-* The first `0x16000` bytes of disc 1's `ud1.bin` precede the first archive and
-  are not SLZ, ASF or NORM. High entropy (6.74 bits/byte) with strong
-  self-correlation at a 128-byte period — many byte pairs differ by exactly
-  `0x80`. Not identified.
+* The first `0x16000` bytes of each `ud1.bin` precede the first archive. Session
+  7 identified most of them: `0x7718`–`0x14803` is the compiled shader library,
+  70 shaders, byte-identical on both discs, and the tail is zero padding. The
+  30 488 bytes before it are a per-disc table with a `0x100`-byte period and are
+  still not identified. See [the engine notes](../aska-engine.md).
 * `tools/mron.py` reports each contiguous non-archive run as a single gap, so
   the reported ASF sizes are runs of concatenated streams. They need splitting.
-* The SLZ algorithm.
+* The SLZ algorithm — solved in session 4, see [slz.md](slz.md).
 * Payload structure for every tag except the broad strokes of `MESH`.
 
 ## 8. Implementation
