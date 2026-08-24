@@ -57,7 +57,7 @@ docs/sessions/ chronological work log
 | `tools/lzx.py` | LZX decompressor for the XCompress variant, written from the published algorithm. Frame-based and stateful, which is what the format actually requires. |
 | `tools/slz.py` | The SLZ compressed-resource wrapper, with bulk self-verification against payload self-reported lengths. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
-| `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, geometry to Wavefront OBJ, and the textures embedded in each model. |
+| `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — export to Wavefront OBJ, the embedded textures, and a bulk check of the vertex decode against the geometry. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
@@ -77,8 +77,9 @@ python tools/aif.py png  extract/textures/317BD800_003_MTEX.aif texture.png
 
 # Pull out a model, look at its scene tree, and export the geometry
 python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag MESH --decompress extract/models
-python tools/asf.py info extract/models/000A4000_006_MESH.asf
-python tools/asf.py obj  extract/models/000A4000_006_MESH.asf sword.obj
+python tools/asf.py info  extract/models/000A4000_006_MESH.asf
+python tools/asf.py obj   extract/models/000A4000_006_MESH.asf sword.obj
+python tools/asf.py check extract/models/*.asf
 
 # Walk the music, which sits between the archives rather than inside them
 python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
@@ -118,7 +119,9 @@ Container offsets for the European release are tabulated in
   stored in the Xbox 360 GPU's own tiled layout.
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource
   holds. A chunk tree carrying geometry, materials, embedded textures and a
-  named node graph.
+  named node graph. The vertex format is solved: normals and binormals to
+  within a degree of the geometry, and blend weights that sum to one on every
+  skinned vertex in the game.
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
@@ -141,9 +144,14 @@ resources parse without error into 3 855 objects and 1.3 million triangles,
 every one of the 22 243 sounds in disc 1's `ud1.bin` passes its checks, with
 all 79 music tracks decoding through a standard XMA2 decoder.
 
-What remains is finer: the non-position parts of a vertex, and the `AAF `
-animation and `ACF ` collision formats. Those are now plain files sitting
-behind tools that work, rather than questions blocked on compression.
+Session 6 added the rest of the vertex: every attribute of all 14 618 meshes
+decodes, and the decode agrees with geometry it did not produce — normals a
+median 2.3° from the triangles around them, blend weights summing to one on
+100.0 % of 2 919 607 skinned vertices.
+
+What remains is finer: the materials that tie a mesh to its textures, and the
+`AAF ` animation and `ACF ` collision formats. Those are now plain files
+sitting behind tools that work, rather than questions blocked on compression.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.

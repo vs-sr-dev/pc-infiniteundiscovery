@@ -8,12 +8,9 @@ Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 
 ## Now the main line of work
 
-**1. The rest of an ASF vertex.** Positions and triangles come out; normals,
-texture coordinates and skinning weights do not. Several readings of the
-remaining fields were tested against each mesh's own texture and none produced
-UV islands matching what is drawn there. The vertex descriptor at `vlas +0x04`
-is the obvious lead — its low nibble already selects the position format, so
-the other nibbles very likely describe the other attributes.
+**1. `ml__` / `mats`, the materials.** With the vertex format solved in session
+6, this is what is left between a decoded mesh and a textured one: the chunks
+that tie geometry to the `AIF ` textures sitting beside it in the same object.
 
 **2. `AAF ` animation and `ACF ` collision.** Both are plain readable files now.
 The engine's RTTI already names the collision primitives — capsule, cube and
@@ -23,10 +20,10 @@ a head start.
 **3. `-CNS` / `SNC-` scene data**, from `SCE-` resources. Only four blocks, but
 scene scripting is likely to explain a lot of the rest.
 
-**4. The ASF chunks nobody has opened:** `ml__`/`mats` (materials — these would
-connect geometry to the embedded textures), `rl__` (render list), `bnpl`/`bnpi`
-(bone pools, so skeletons), `ptcl`/`pprn`/`pani` (particles), and `modf`,
-`extl`, `PAIF`, `AAIF`, `ACHF`, `rnel`, `glbl`, `mdfr`, `anim`.
+**4. The ASF chunks nobody has opened:** `rl__` (render list), `bnpl`/`bnpi`
+(bone pools — the vertex bone indices decode, but what they index into has
+not been read), `ptcl`/`pprn`/`pani` (particles), and `modf`, `extl`, `PAIF`,
+`AAIF`, `ACHF`, `rnel`, `glbl`, `mdfr`, `anim`.
 
 **5. The 59 ASF objects in 3 855 whose geometry misses their stated bounding
 box** by more than 10 %. They are mostly treasure chests and morph targets —
@@ -71,6 +68,12 @@ stored vertices are not in.
 
 14. **Five missing music tracks** — the numbers 35, 45, 46, 55 and 74 appear on
     neither disc. Cut, or somewhere not yet walked.
+
+15. **The ASF vertex leftovers**, small after session 6: the descriptor nibble
+    in slot 3 that two meshes set, the 24 meshes whose stride is rounded up
+    rather than exact, and whether slot 4 holds a binormal or a tangent with
+    the texture coordinates rotated — which only rendering a mesh against its
+    own texture will settle.
 
 ## Verified, needs no further work
 
