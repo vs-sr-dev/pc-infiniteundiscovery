@@ -293,6 +293,40 @@ run together where the tables abut.
 * **Effects**: `SpriteAnimTex`, `ImageTexture`, `ParamTexture`, and
   `eKamaitachiAnim`, named for the kamaitachi of Japanese folklore — the
   sickle-weasel whose wind attack the effect presumably draws.
+* **Materials**: `eBlinn_Diffuse_Color0`, `eBlinn_Ambient_Color0`,
+  `eBlinn_Specular_Color0`, `eBlinn_Translucent_Color0`,
+  `eParallax_Offset_Scalar0`, `eConstColor_Color`. The `e` names are the ones a
+  material fills in: an ASF `mats` carries exactly those values as float
+  constants, diffuse and ambient and specular in that order. See
+  [ASF](formats/asf.md).
+
+### The shading system
+
+Elsewhere in the executable, outside the shader library itself, sits the
+vocabulary of the system that assembles those shaders — a fragment table and a
+register file:
+
+* **Shader fragments**, named as such: `MarschnerShader`, `AshikhminShader`,
+  `KajiyaKayShader`, `NormalMap`, `NormalMapXYH`, `DoubleSided`,
+  `DoubleSidedBackFaceOnly`, `ParallaxMappingLo`, `DecodeTexRGBE`,
+  `DecodeTexRGBL`, `Fresnel`, `LightMaskMixer`, `PlaneAbsorption`,
+  `UVSetTransform`, `Lerp`, `BranchGTZBegin` / `BranchEnd`.
+* **Registers**: `avUVSet[0..15]`, `avWorkReg[0..31]`, `avTexCoord[0..3]`,
+  `afScalarWork[0..3]`, `avTmpReg[0..5]`, `avVertexLighting[0..1]`,
+  `eamUVShiftMatrix[0..3]`, and the outputs `vFinalColor`, `vFinalMultiply`,
+  `vFinalOffset`, `vNormal`, `vReflection`, `vLightMask`.
+* **Passes**: `ShadowCascadeDepthProjector`, `ShadowCubeMapDepthProjector`,
+  `ShadowDepthProjectorCond_PCF16` / `_PCF9` / `_PointSample`, `PoissonDOF`
+  with `_Eclipse` / `_MaskTest` / `_Odd` variants, `PostPrsCombinerCond_*` for
+  vignetting, film grain, dither and tone mapping, `DistortionFilter_*` for
+  radial blur and waves, and a fifteen-strong `Particle_Cond*` family.
+
+Two of the fragment names are named BRDFs — **Marschner** for hair and
+**Ashikhmin–Shirley** for anisotropic surfaces, with Kajiya–Kay as the cheaper
+hair alternative. Both appear as node types in the shading networks shipped
+inside the models, which is where the corroboration runs both ways: the ASF
+render lists name nodes `marschner` and `ashikhmin` from the artists' side, and
+the executable names shaders of the same kind from the engine's.
 
 ### Reproducing
 

@@ -63,7 +63,7 @@ ASF                    the file
       bnpi             bone pool indices
       idxl             triangle indices
       vlas             vertices
-    rl__               render list
+    rl__ / rnel        the shading network
     ptcl / pprn / pani particles
   tree                 the node graph
     attr               one named node
@@ -71,8 +71,8 @@ ASF                    the file
   eof_                 end marker
 ```
 
-`PAIF`, `AAIF`, `ACHF`, `rnel`, `glbl`, `mdfr` and `anim` also occur, and have
-not been looked at.
+`PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr` and `anim` also occur, and have not been
+looked at.
 
 ## 2. The node tree
 
@@ -202,7 +202,155 @@ offset or a wrong width breaks it immediately.
 Four bytes, and the values give it away: `FFFFFFFF`, `FF7F7F7F`, `00FFFFFF`,
 `FF999999`. White, mid grey, white with no alpha. A `D3DCOLOR`.
 
-## 5. What was verified
+## 5. Materials
+
+A `mess` decodes to geometry and an `AIF ` decodes to pixels, but until now
+nothing said which pixels belonged to which triangles. The link is a pointer,
+and it is in the mesh.
+
+### The mesh points at its material
+
+`mess +0x14` holds a **signed 32-bit displacement**, counted from the start of
+the mesh chunk, to the `mats` that shades it.
+
+It lands on a chunk tagged `mats` for **every one of the 4 176 meshes** in the
+corpus — 400 `MESH` resources, of which 369 are ASF. A misread field would not
+do that: the value is not aligned to anything obvious, it is negative on some
+meshes and positive on others, and it ranges over the whole file.
+
+More to the point, **57 % of the time it points into a different object's
+`ml__`**. Materials are shared across the objects of one file, which is why
+2 205 of the 3 694 objects have an empty `ml__` and yet every one of their
+meshes is shaded.
+
+Two independent facts agree with the pointer, neither of which it could have
+produced:
+
+| Check | Result |
+| --- | ---: |
+| Materials used only by meshes of one single vertex descriptor | 1 755 of 1 794 |
+| Meshes with texture coordinates exactly when their material has textures | 4 172 of 4 176 |
+
+A shader needs the attributes it was compiled against, so meshes sharing a
+material should share a vertex format, and a material with no texture should be
+worn by a mesh with no UVs. Both hold at 97.8 % and 99.9 %. A wrong pointer
+would scatter both.
+
+### Inside a `mats`
+
+Every `mats` states `0xB0` at `+0x04`. That is the **header** size, not the
+content size — the first section starts the moment it ends.
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| `+0x16` | 1 | Number of shader constants |
+| `+0x18` | 1 | Number of texture references |
+| `+0x19` | 1 | Number of entries in a fourth table, 48 bytes each |
+| `+0x1C` | 4 | Offset of the shader program block; `0xB0` everywhere |
+| `+0x20` | 4 | Offset of the constant binding table |
+| `+0x2C` | 4 | Offset of the texture reference table, or zero |
+
+The float constants have no offset of their own. They follow the binding table,
+rounded up to sixteen, one 16-byte row per binding. That is not an assumption:
+laying the sections out in this order and adding their lengths **reproduces the
+start of the next material exactly on 1 793 of the 1 794** materials in the
+corpus, and the one exception leaves sixteen bytes over.
+
+There is a wrinkle, and it is the same one `vlas` has. The step in the chunk
+header **stops short of the texture reference table** on 1 377 materials, so a
+walk that trusts it lands inside the data rather than on the next chunk. That
+is why `ml__` looks childless to a tiling walk, and why this reader computes a
+material's extent instead of taking it.
+
+### The texture reference
+
+Twenty-four bytes, of which the first eight are the key:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| `+0x00` | 4 | Four-character asset name |
+| `+0x04` | 4 | Asset identifier |
+| `+0x08` | 2 | `0x0001`, `0x0002`, `0x0080`, `0x0081`, `0x0082` |
+| `+0x0A` | 2 | `0x0003` everywhere |
+| `+0x0C` | 4 | `0x100`, `0x200`, `0x400`, `0x800`, `0xA00` |
+| `+0x10` | 8 | Zero |
+
+**Those first eight bytes are the eight bytes at `AIF +0x20`** — the asset name
+[the AIF notes](aif.md) already read, followed by the word at `+0x24` that they
+listed as unidentified. Together they name a texture, and 2 611 of the 2 892
+references in the corpus resolve to an `AIF ` embedded in the same file. The
+other 281 name a texture that lives in another resource; their names are the
+same `CH01`, `EF01`, `USER` vocabulary, so they are references out, not a
+misparse.
+
+The two fields at `+0x08` and `+0x0C` are not yet read. Neither separates a
+colour map from a normal map: classifying 625 decoded textures by whether their
+average pixel is the flat lavender of a tangent-space normal map splits every
+value of both fields in roughly the same proportion. The only signal is
+positional and weak — the first texture in a list is a colour map 91 % of the
+time, the second is a normal map 58 % of the time.
+
+### The constants
+
+Each binding is eight bytes: a group, an index, a width of 4, and a word that
+runs `0x60`, `0x68`, `0x70` … in step with the entry number on every material
+seen, and so says nothing this reader can use. The rows they bind read as an
+ordinary shader. On Miruce's spellbook, whose render list names the node a
+"blinn":
+
+```
+constant 0.0  0.8 0.8 0.8 1      diffuse
+constant 1.0  0.2 0.2 0.2 1      ambient
+constant 2.0  1 1 1 20           specular, and a specular power
+```
+
+The engine agrees on the vocabulary: the compiled shader library in the first
+`0x16000` bytes of `ud1.bin`, found in session 7, carries the constant names
+`eBlinn_Diffuse_Color0`, `eBlinn_Ambient_Color0` and `eBlinn_Specular_Color0`.
+
+### `rl__` — the shading network
+
+`rl__` holds one `rnel` per node of the shading graph the artists built, and
+each `rnel` opens with the node's name, as untouched as the names in `tree`:
+
+```
+R:M:Material_Book   R:M:Blinn_Book   R:M:Tex_Book   R:M:Tex_Normal
+R:M:Material_Page0  R:M:Phong_Page0  R:M:Tex_Page1
+```
+
+The byte at `+0x30` types the node, `+0x32` counts the four-byte entries that
+follow at `+0x34`, and those entries have not been read.
+
+| Type | Reading | Nodes |
+| --- | --- | ---: |
+| `0x01` | shading group | 4 161 |
+| `0x03` | phong | 2 972 |
+| `0x04` | blinn | 103 |
+| `0x05` | anisotropic phong | 20 |
+| `0x06` | ashikhmin | 34 |
+| `0x07` | double sided | 2 |
+| `0x09` | texture | 4 967 |
+| `0x0A` | normal map | 1 301 |
+| `0x0C` | blend colours | 843 |
+| `0x0D` | calc vectors | 18 |
+| `0x0E` | fresnel | 48 |
+| `0x0F` | sampling offset | 46 |
+| `0x12` | lambert | 4 |
+| `0x1B` | marschner | 86 |
+
+The readings come from the names — every type-3 node is called some variation
+of `phong`, every type-0x1B node some variation of `marschner` — but four of
+them are corroborated by a source that owes nothing to the artists' naming.
+`MarschnerShader`, `AshikhminShader`, `NormalMap` and `DoubleSided` are all
+strings in the retail executable, alongside `KajiyaKayShader` and a register
+vocabulary — `avUVSet[0..15]`, `avWorkReg[0..31]`, `eamUVShiftMatrix[0..3]`,
+`vFinalColor` — that belongs to the same shader system.
+
+Marschner and Ashikhmin–Shirley are named BRDFs, for hair and for anisotropic
+surfaces. Finding both in a 2008 console title is a note about the engine, not
+just about the file format.
+
+## 6. What was verified
 
 Over all 1 505 `MESH` resources of disc 1's `ud1.bin`, of which 1 438
 decompress to an `ASF ` and 67 to a nested NORM archive:
@@ -214,6 +362,18 @@ decompress to an `ASF ` and 67 to a nested NORM archive:
 | Meshes | 14 618 |
 | Descriptor nibbles not accounted for | **2 meshes, slot 3** |
 | Meshes whose layout adds up to the stated stride | 14 594 of 14 618 |
+
+And over the first 400 `MESH` resources, 369 of which are ASF:
+
+| | |
+| --- | ---: |
+| Materials | 1 794 |
+| Materials whose computed extent lands on the next one | **1 793** |
+| Meshes | 4 176 |
+| Meshes whose `+0x14` displacement lands on a `mats` | **4 176** |
+| Meshes agreeing with their material on texture coordinates | 4 172 |
+| Texture references | 2 892 |
+| References resolving to an AIF in the same file | 2 611 |
 
 ### The decode against geometry it did not produce
 
@@ -243,12 +403,20 @@ The vertex data alone cannot tell a binormal apart from a tangent whose texture
 coordinates are rotated by ninety degrees: both readings fit every measurement
 above equally well.
 
-What separates them is texel density. On meshes whose object carries a single
-non-square texture, taking the pair as `(u, v)` and the stored vector as the
-binormal gives a median anisotropy of **2.0**; reading the coordinates rotated
-gives **7.0**. Artists match texel density, so the first is the reading, and it
-is recorded here as a reading rather than a certainty. Rendering a mesh against
-its own texture would settle it outright.
+What separates them is texel density. Session 6 measured it on the meshes whose
+object carried a single non-square texture, because there was no way to say
+which texture a mesh used. There is now, so the measurement can be redone
+properly: for every mesh whose material's first texture is non-square, scaling
+its texture coordinates by that texture's own width and height and comparing the
+two world-space axes gives a median anisotropy of **1.89** over 251 914
+triangles, against **5.03** for the rotated reading.
+
+Artists match texel density, so the plain reading is the one — and it is still
+recorded here as a reading rather than a certainty. One caveat is worth stating:
+deliberately mis-assigning each mesh to the next texture in its file barely
+moves the number (median 1.69), because the textures of one file tend to share
+an aspect ratio. So this measurement supports the binormal reading strongly and
+the material link not at all; the evidence for the link is in section 5.
 
 ### The bounding-box check, from session 4
 
@@ -277,17 +445,24 @@ made every flat object — billboards, decal planes, with one extent of exactly
 zero — report an infinite error on a perfect decode. The error is now scaled by
 the object's largest extent.
 
-## 6. Implementation
+## 7. Implementation
 
 [`tools/asf.py`](../../tools/asf.py):
 
 ```
-python tools/asf.py tree     <file.asf>          # the chunk tree
-python tools/asf.py info     <file.asf>          # summary and bounding-box check
-python tools/asf.py obj      <file.asf> out.obj  # positions, UVs, normals
-python tools/asf.py textures <file.asf> outdir/  # the embedded AIF textures
-python tools/asf.py check    <file.asf> [...]    # measure the vertex decode
+python tools/asf.py tree      <file.asf>          # the chunk tree
+python tools/asf.py info      <file.asf>          # summary and bounding-box check
+python tools/asf.py materials <file.asf>          # what shades what
+python tools/asf.py obj       <file.asf> out.obj  # positions, UVs, normals
+python tools/asf.py obj       <file.asf> out.obj --textures   # with an MTL and PNGs
+python tools/asf.py textures  <file.asf> outdir/  # the embedded AIF textures
+python tools/asf.py check     <file.asf> [...]    # measure the decode
 ```
+
+`obj` writes a companion `.mtl`, one entry per `mats`, with the material's own
+diffuse, ambient and specular constants and each mesh assigned to it by
+`usemtl`. With `--textures` it also decodes that material's first texture to a
+PNG beside the OBJ and points `map_Kd` at it, so the export opens textured.
 
 Getting a file to point it at:
 

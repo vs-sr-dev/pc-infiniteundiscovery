@@ -28,7 +28,7 @@ then pixel data.
 | `0x18` | 4 | Zero |
 | `0x1C` | 4 | Zero, or `0x70` |
 | `0x20` | 4 | Asset identifier, four ASCII characters |
-| `0x24` | 4 | Unidentified, varies per asset |
+| `0x24` | 4 | Asset number; with `0x20`, the key a material references |
 | `0x28` | 4 | Zero |
 | `0x2C` | 4 | `0x0FF0` everywhere |
 | `0x30` | 4 | Pixel format |
@@ -70,6 +70,12 @@ prefixes fall into a small set:
 
 The executable carries its own embedded AIFs — six of them — identified as
 `Dg#1`.
+
+The eight bytes at `0x20` and `0x24` are one key, not two fields. A material
+inside an [ASF](asf.md) references its textures by exactly those eight bytes,
+and 2 611 of the 2 892 references in the ASF corpus resolve to a texture
+embedded in the same file. So `0x24` is the asset number and the pair is a
+texture's name.
 
 ## 3. Pixel formats
 

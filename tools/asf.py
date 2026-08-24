@@ -40,7 +40,7 @@ sits in, so a texture extracted out of an ASF needs the offset it came from.
     ASF                      the file
       ao__                   one object: bounds, then everything it needs
         AIF                  an embedded texture, in the AIF format
-        ml__ / mats          materials
+        ml__ / mats          materials (see below)
         bnpl                 bone pool
         mess                 one mesh
           bnpi               bone pool indices
@@ -109,13 +109,52 @@ with the texture coordinates rotated by ninety degrees. What settles it is that
 the plain reading keeps texel density isotropic on meshes whose texture is not
 square, and the rotated one stretches it by a factor of about 3.5.
 
+Materials
+---------
+`ml__` is a list of `mats` chunks and a `mats` is one material. What ties a
+mesh to one is a signed 32-bit displacement at mess +0x14, counted from the
+start of the mesh chunk. It lands on a `mats` for every one of the 4 176 meshes
+in the corpus, and 57% of the time it lands in a *different* object's `ml__`,
+which is how one file shares a material between several objects.
+
+Two things the pointer did not produce agree with it. The meshes that share a
+material almost always share a vertex format -- 1 755 of 1 794 materials are
+used by meshes of one single descriptor -- and a mesh has texture coordinates
+exactly when its material has textures, on 4 172 of the 4 176 meshes. Neither
+would hold if the displacement were being read wrongly.
+
+A material's own layout is four sections after a 0xB0-byte header: a shader
+program block, a table of constant bindings 8 bytes an entry, the float
+constants themselves 16 bytes a row, and a table of texture references 24 bytes
+an entry. Only the first, second and fourth have stated offsets; the constants
+simply follow the bindings, rounded up to 16. Laying it out that way and adding
+the lengths reproduces the start of the next material exactly on 1 793 of the
+1 794 materials, which is the check that the reading is right.
+
+The first eight bytes of a texture reference are the same eight bytes that sit
+at AIF +0x20: the four-character asset name, and the word beside it that had
+never been identified. 90.3% of references resolve to a texture embedded in the
+same file; the rest name one that lives in another resource.
+
+The constants read as an ordinary shader. The first three rows of the first
+material read here are 0.8/0.8/0.8, 0.2/0.2/0.2 and 1/1/1 with 20 in the fourth
+component -- diffuse, ambient, specular and a specular power -- and the render
+list beside them names the node a "blinn".
+
+`rl__` holds the shading network the artists built, one `rnel` per node, each
+with its name and a type byte. The type byte is corroborated from outside the
+artists' naming: types 0x1B, 0x06, 0x0A and 0x07 are marschner, ashikhmin,
+normal map and double sided, and `MarschnerShader`, `AshikhminShader`,
+`NormalMap` and `DoubleSided` are all strings in the retail executable.
+
 Usage
 -----
-    python tools/asf.py tree     <file.asf>
-    python tools/asf.py info     <file.asf>
-    python tools/asf.py obj      <file.asf> <out.obj>
-    python tools/asf.py textures <file.asf> <outdir>
-    python tools/asf.py check    <file.asf> [...]
+    python tools/asf.py tree      <file.asf>
+    python tools/asf.py info      <file.asf>
+    python tools/asf.py materials <file.asf>
+    python tools/asf.py obj       <file.asf> <out.obj> [--textures]
+    python tools/asf.py textures  <file.asf> <outdir>
+    python tools/asf.py check     <file.asf> [...]
 """
 
 from __future__ import annotations
@@ -148,7 +187,8 @@ TAG_MEANINGS = {
     "mess": "mesh",
     "idxl": "triangle indices",
     "vlas": "vertices",
-    "rl__": "render list",
+    "rl__": "shading network",
+    "rnel": "shading node",
     "tree": "node graph",
     "attr": "node",
     "modf": "unexamined",
@@ -393,6 +433,12 @@ class Mesh:
         self.descriptor = 0
         self.format = None
         self.position_format = None
+        # A signed 32-bit displacement from the start of this chunk to the
+        # `mats` that shades it. It reaches outside the object: 57% of meshes
+        # point into another object's material list, which is how one ASF
+        # shares a material between several objects.
+        self.material_offset = chunk.offset + struct.unpack_from(
+            ">i", chunk.blob, chunk.offset + 0x14)[0]
         for child in chunk.children():
             if child.tag == "vlas" and self.vertex_count:
                 self._read_vertices(child)
@@ -459,6 +505,169 @@ class Mesh:
             yield self.indices[i], self.indices[i + 1], self.indices[i + 2]
 
 
+# The type byte at rnel +0x30. The names are self-identifying: every node of
+# type 3 is called some variation of "phong", every node of type 0x1B some
+# variation of "marschner". Four of them are corroborated by strings in the
+# retail executable -- `MarschnerShader`, `AshikhminShader`, `NormalMap`,
+# `DoubleSided` -- which is a source that owes nothing to the artists' naming.
+RENDER_NODE_TYPES = {
+    0x01: "shading group",
+    0x03: "phong",
+    0x04: "blinn",
+    0x05: "anisotropic phong",
+    0x06: "ashikhmin",
+    0x07: "double sided",
+    0x09: "texture",
+    0x0A: "normal map",
+    0x0C: "blend colours",
+    0x0D: "calc vectors",
+    0x0E: "fresnel",
+    0x0F: "sampling offset",
+    0x12: "lambert",
+    0x1B: "marschner",
+}
+
+MATERIAL_HEADER = 0xB0
+
+
+def _align_up(value, to):
+    return (value + to - 1) // to * to
+
+
+class TextureRef:
+    """One 24-byte entry in a material's texture list.
+
+    The first eight bytes are the key, and they are the same eight bytes that
+    sit at +0x20 of an AIF header -- the four-character asset name that
+    `aif.py` already reads, followed by the word next to it that had never been
+    identified. Together they name a texture. 90.3% of the references in the
+    corpus resolve to an AIF embedded in the same file; the rest name one that
+    lives in another resource.
+    """
+
+    __slots__ = ("key", "usage", "channel", "index")
+
+    def __init__(self, blob, at, index):
+        self.key = bytes(blob[at:at + 8])
+        self.usage = struct.unpack_from(">H", blob, at + 8)[0]
+        self.channel = struct.unpack_from(">I", blob, at + 12)[0]
+        self.index = index
+
+    @property
+    def name(self):
+        raw = self.key[:4]
+        if all(32 <= b < 127 for b in raw):
+            return raw.decode("latin-1")
+        return raw.hex()
+
+    @property
+    def asset(self):
+        return struct.unpack_from(">I", self.key, 4)[0]
+
+    def __str__(self):
+        return "%s:%08X" % (self.name, self.asset)
+
+
+class Material:
+    """One `mats`: what a mesh is shaded with.
+
+    The 0xB0-byte header states, in order, how many shader constants the
+    material carries, how many textures it references, and where each of its
+    three tables begins:
+
+        +0x16  1  constant count
+        +0x18  1  texture reference count
+        +0x19  1  count of a fourth table, 48 bytes an entry
+        +0x1C  4  offset of the shader program block; always 0xB0, so the
+                  block begins the moment the header ends
+        +0x20  4  offset of the constant binding table, 8 bytes an entry
+        +0x2C  4  offset of the texture reference table, 24 bytes an entry
+
+    The float constants are not given an offset of their own: they follow the
+    binding table, rounded up to 16, one 16-byte row per binding. That is not
+    an assumption -- laying the sections out this way and adding up their
+    lengths reproduces the start of the next material exactly on 1 793 of the
+    1 794 materials in the corpus.
+
+    One wrinkle, the same one `vlas` has: the step in the chunk header stops
+    short of the texture reference table on 1 377 materials, so a walk that
+    trusts it lands in the middle of the data. This reader computes the extent
+    instead.
+    """
+
+    def __init__(self, blob, offset):
+        self.blob = blob
+        self.offset = offset
+        size = struct.unpack_from(">I", blob, offset + 4)[0]
+        if size != MATERIAL_HEADER:
+            raise AsfError("mats at 0x%X states a header of %d bytes"
+                           % (offset, size))
+        self.constant_count = blob[offset + 0x16]
+        self.texture_count = blob[offset + 0x18]
+        self.transform_count = blob[offset + 0x19]
+        self.program_offset = struct.unpack_from(">I", blob, offset + 0x1C)[0]
+        self.binding_offset = struct.unpack_from(">I", blob, offset + 0x20)[0]
+        self.texture_offset = struct.unpack_from(">I", blob, offset + 0x2C)[0]
+
+        # Each binding is (group, index, width) and a word that runs 0x60,
+        # 0x68, 0x70 ... in step with the entry number on every material seen,
+        # so it carries no information this reader can use yet.
+        self.bindings = []
+        for i in range(self.constant_count):
+            at = offset + self.binding_offset + i * 8
+            self.bindings.append((blob[at + 1], blob[at + 2], blob[at + 3],
+                                  struct.unpack_from(">I", blob, at + 4)[0]))
+
+        self.constants_offset = _align_up(
+            self.binding_offset + 8 * self.constant_count, 16)
+        self.constants = [
+            struct.unpack_from(">4f", blob, offset + self.constants_offset + i * 16)
+            for i in range(self.constant_count)]
+
+        self.textures = []
+        if self.texture_offset:
+            for i in range(self.texture_count):
+                self.textures.append(
+                    TextureRef(blob, offset + self.texture_offset + i * 24, i))
+
+    @property
+    def end(self):
+        """Where this material stops, computed rather than taken from the step."""
+        last = self.constants_offset + 16 * self.constant_count
+        if self.texture_offset:
+            last = max(last, self.texture_offset + 24 * self.texture_count)
+        return self.offset + _align_up(last, 16) + 48 * self.transform_count
+
+
+class RenderNode:
+    """One `rnel`: a named node of the shading network the artists built.
+
+    The name survived export untouched, the same way the node names in `tree`
+    did, so the list reads as a Maya shading graph: a shading group, the
+    shader hanging off it, and the file textures hanging off that.
+
+        R:M:Material_Book  R:M:Blinn_Book  R:M:Tex_Book  R:M:Tex_Normal
+
+    The byte at +0x30 types the node and the byte at +0x32 counts the four-byte
+    entries that follow at +0x34, which have not been read.
+    """
+
+    __slots__ = ("chunk", "name", "kind", "entries")
+
+    def __init__(self, chunk):
+        self.chunk = chunk
+        self.name = chunk.name(0) or "<unnamed>"
+        self.kind = chunk.blob[chunk.offset + 0x30]
+        count = chunk.blob[chunk.offset + 0x32]
+        self.entries = [struct.unpack_from(">I", chunk.blob,
+                                           chunk.offset + 0x34 + i * 4)[0]
+                        for i in range(count)]
+
+    @property
+    def type_name(self):
+        return RENDER_NODE_TYPES.get(self.kind, "type 0x%02X" % self.kind)
+
+
 class Object3D:
     """One `ao__`: an oriented bounding box, meshes, and embedded textures."""
 
@@ -471,11 +680,18 @@ class Object3D:
         self.name = chunk.name(0x80)
         self.meshes = []
         self.textures = []
+        self.material_lists = []
+        self.render_nodes = []
         for child in chunk.children():
             if child.tag == "mess":
                 self.meshes.append(Mesh(child))
             elif child.tag == "AIF ":
                 self.textures.append(child)
+            elif child.tag == "ml__":
+                self.material_lists.append(child)
+            elif child.tag == "rl__":
+                self.render_nodes.extend(RenderNode(c) for c in child.children()
+                                         if c.tag == "rnel")
 
     def extent_error(self):
         """Largest disagreement between stated and measured extents.
@@ -515,6 +731,41 @@ class AsfFile:
                            % (self.total_size, len(data)))
         self.chunks = list(walk(data, 0x20, self.total_size))
         self.objects = [Object3D(c) for c in self.chunks if c.tag == "ao__"]
+        self.materials = self._read_materials()
+        self.texture_index = {}
+        for obj in self.objects:
+            for chunk in obj.textures:
+                key = bytes(data[chunk.offset + 0x20:chunk.offset + 0x28])
+                self.texture_index.setdefault(key, chunk)
+
+    def _read_materials(self):
+        """Every `mats` in the file, keyed by offset.
+
+        Materials are read from every `ml__` in the file rather than per
+        object, because a mesh's material pointer reaches across objects. A
+        `mats` is found by its tag on a 16-byte boundary and then measured; the
+        measured extents tile each `ml__` exactly, which is the check that the
+        layout in `Material` is right.
+        """
+        found = {}
+        for obj in self.objects:
+            for chunk in obj.material_lists:
+                at = chunk.offset + HEADER
+                while at <= chunk.end - HEADER:
+                    if self.data[at:at + 4] == b"mats":
+                        material = Material(self.data, at)
+                        found[at] = material
+                        at = max(material.end, at + 16)
+                    else:
+                        at += 16
+        return found
+
+    def material_of(self, mesh):
+        return self.materials.get(mesh.material_offset)
+
+    def texture_of(self, ref):
+        """The embedded AIF a texture reference names, if it is in this file."""
+        return self.texture_index.get(ref.key)
 
     @property
     def closed(self):
@@ -580,6 +831,18 @@ def cmd_info(args):
     for layout, count in sorted(layouts.items(), key=lambda kv: -kv[1])[:4]:
         print("vertex    : %s  (%d meshes)" % (layout, count))
     print("textures  : %d embedded AIF" % textures)
+    resolved = sum(1 for m in meshes if asf.material_of(m) is not None)
+    refs = [r for mat in asf.materials.values() for r in mat.textures]
+    print("materials : %d, %d of %d meshes point at one, %d texture references, "
+          "%d of them in this file"
+          % (len(asf.materials), resolved, len(meshes), len(refs),
+             sum(1 for r in refs if asf.texture_of(r) is not None)))
+    nodes = [n for o in asf.objects for n in o.render_nodes]
+    if nodes:
+        print("shading   : %d render-list nodes  %s"
+              % (len(nodes), ", ".join("%s (%s)" % (n.name, n.type_name)
+                                       for n in nodes[:4])
+                 + (" ..." if len(nodes) > 4 else "")))
     names = list(asf.nodes())
     print("nodes     : %d  %s" % (len(names), ", ".join(names[:8])
                                   + (" ..." if len(names) > 8 else "")))
@@ -597,19 +860,62 @@ def cmd_info(args):
     return 0
 
 
+def cmd_materials(args):
+    """What shades what: every mesh, its material, and that material's textures."""
+    asf = load(args.file)
+    print("%d material%s in the file" % (len(asf.materials),
+                                         "" if len(asf.materials) == 1 else "s"))
+    order = {offset: i for i, offset in enumerate(sorted(asf.materials))}
+    for index, obj in enumerate(asf.objects):
+        print("")
+        print("object %d  %s" % (index, obj.name or "<unnamed>"))
+        for node in obj.render_nodes:
+            print("   node   %-18s %s" % (node.type_name, node.name))
+        for number, mesh in enumerate(obj.meshes):
+            material = asf.material_of(mesh)
+            if material is None:
+                print("   mesh %d -> 0x%X, which is not a material"
+                      % (number, mesh.material_offset))
+                continue
+            inside = obj.chunk.offset < mesh.material_offset < obj.chunk.end
+            print("   mesh %d  %5d vertices -> material %d at 0x%X%s"
+                  % (number, mesh.vertex_count, order[mesh.material_offset],
+                     mesh.material_offset, "" if inside else "  (shared)"))
+            for ref in material.textures:
+                chunk = asf.texture_of(ref)
+                if chunk is None:
+                    detail = "not in this file"
+                else:
+                    w, h = struct.unpack_from(">HH", asf.data, chunk.offset + 0x38)
+                    detail = "embedded at 0x%X, %dx%d" % (chunk.offset, w, h)
+                print("      texture %d  %-16s usage 0x%04X  %s"
+                      % (ref.index, str(ref), ref.usage, detail))
+            for (group, slot, width, _word), value in zip(material.bindings,
+                                                          material.constants):
+                print("      constant %d.%d  %s"
+                      % (group, slot, " ".join("%g" % v for v in value[:width])))
+    return 0
+
+
 def cmd_obj(args):
     asf = load(args.file)
     written = base = uv_base = normal_base = 0
+    order = {offset: i for i, offset in enumerate(sorted(asf.materials))}
+    mtl_path = os.path.splitext(args.output)[0] + ".mtl"
+    pngs = _write_mtl(asf, mtl_path, order, args.textures)
     with open(args.output, "w", encoding="utf-8") as fo:
         fo.write("# %s\n# positions, texture coordinates, normals and triangles.\n"
                  "# Faces are written a-c-b: the game winds its front faces the\n"
                  "# other way round, which is how the normals come out pointing\n"
                  "# outwards.\n" % os.path.basename(args.file))
+        fo.write("mtllib %s\n" % os.path.basename(mtl_path))
         for index, obj in enumerate(asf.objects):
             for number, mesh in enumerate(obj.meshes):
                 if not mesh.vertices:
                     continue
                 fo.write("o %s_%d_%d\n" % (obj.name or "object", index, number))
+                if mesh.material_offset in order:
+                    fo.write("usemtl material_%d\n" % order[mesh.material_offset])
                 for x, y, z in mesh.vertices:
                     fo.write("v %.6f %.6f %.6f\n" % (x, y, z))
                 for uv in mesh.uvs:
@@ -632,7 +938,65 @@ def cmd_obj(args):
                 uv_base += len(mesh.uvs)
                 normal_base += len(mesh.normals)
     print("wrote %s: %d vertices, %d triangles" % (args.output, base, written))
+    print("wrote %s: %d materials, %d textures" % (mtl_path, len(order), pngs))
     return 0
+
+
+def _write_mtl(asf, path, order, want_textures):
+    """The companion .mtl: one material per `mats`, with its first texture.
+
+    The colours are the material's own float constants. The first three rows
+    read as diffuse, ambient and specular with the specular power in the fourth
+    component -- 0.8/0.8/0.8, 0.2/0.2/0.2, 1/1/1 and 20 on the first object
+    this was read on, which is an ordinary Maya shader and exactly what the
+    node the render list calls a "blinn" would want.
+    """
+    written = 0
+    directory = os.path.dirname(os.path.abspath(path))
+    with open(path, "w", encoding="utf-8") as fo:
+        fo.write("# materials, one per mats chunk\n")
+        for offset, index in sorted(order.items(), key=lambda kv: kv[1]):
+            material = asf.materials[offset]
+            fo.write("\nnewmtl material_%d\n" % index)
+            for name, row in zip(("Kd", "Ka", "Ks"), material.constants):
+                fo.write("%s %.4f %.4f %.4f\n" % (name, row[0], row[1], row[2]))
+            if len(material.constants) > 2:
+                fo.write("Ns %.2f\n" % material.constants[2][3])
+            for ref in material.textures[:1]:
+                chunk = asf.texture_of(ref)
+                if chunk is None:
+                    fo.write("# %s is not in this file\n" % ref)
+                    continue
+                # Not str(ref): the colon in a texture's printed name is not
+                # a filename character on every platform.
+                png = "%s_%08X.png" % (ref.name, ref.asset)
+                if want_textures and _write_png(asf, chunk,
+                                                os.path.join(directory, png)):
+                    fo.write("map_Kd %s\n" % png)
+                    written += 1
+                else:
+                    fo.write("# %s is embedded at 0x%X\n" % (ref, chunk.offset))
+    return written
+
+
+def _write_png(asf, chunk, path):
+    """Decode one embedded texture straight to a PNG beside the OBJ.
+
+    AIF pixel data begins at the next 4096-byte boundary of the file it sits
+    in, so the chunk goes to `aif.py` together with the offset it came from.
+    """
+    try:
+        import aif
+    except ImportError:
+        return False
+    try:
+        image = aif.AifImage(asf.data[chunk.offset:chunk.offset + chunk.size],
+                             base=chunk.offset)
+        aif.write_png(path, image.width, image.height, image.to_rgba())
+    except Exception as error:          # a format aif.py declines to decode
+        print("   %s: %s" % (os.path.basename(path), error))
+        return False
+    return True
 
 
 def _obj_vertex(position, texture, normal, have_uv, have_normal):
@@ -739,14 +1103,27 @@ def cmd_check(args):
     meshes = weights = weights_ok = 0
     unknown = {}
     padded = failed = 0
+    materials = tiled = linked = agreed = refs = refs_here = 0
     for path in args.files:
         try:
             asf = load(path)
         except AsfError:
             failed += 1
             continue
+        materials += len(asf.materials)
+        refs += sum(len(m.textures) for m in asf.materials.values())
+        refs_here += sum(1 for m in asf.materials.values() for r in m.textures
+                         if asf.texture_of(r) is not None)
+        tiled += _materials_tile(asf)
         for obj in asf.objects:
             for mesh in obj.meshes:
+                material = asf.material_of(mesh)
+                if material is not None:
+                    linked += 1
+                    # A mesh should carry texture coordinates exactly when the
+                    # material it points at has textures. Nothing in the
+                    # pointer knows that, so agreement is a check on it.
+                    agreed += bool(mesh.uvs) == bool(material.textures)
                 if mesh.format is None:
                     continue
                 meshes += 1
@@ -780,7 +1157,31 @@ def cmd_check(args):
     if weights:
         print("%-42s %.1f%% of %d vertices"
               % ("blend weights summing to one", 100.0 * weights_ok / weights, weights))
+    if materials:
+        print("%-42s %d, %d laid out end to end" % ("materials", materials, tiled))
+        print("%-42s %d meshes, %d agree on texture coordinates"
+              % ("meshes linked to a material", linked, agreed))
+        print("%-42s %d, %d embedded in the same file"
+              % ("texture references", refs, refs_here))
     return 0
+
+
+def _materials_tile(asf):
+    """How many materials end exactly where the next one begins.
+
+    The extent of a `mats` is computed from its section offsets and counts,
+    because the step in its chunk header stops short of the texture reference
+    table. Landing on the next material is therefore a test of the computation.
+    """
+    exact = 0
+    for obj in asf.objects:
+        for chunk in obj.material_lists:
+            found = sorted(o for o in asf.materials
+                           if chunk.offset < o < chunk.end)
+            for i, offset in enumerate(found):
+                after = found[i + 1] if i + 1 < len(found) else chunk.end
+                exact += asf.materials[offset].end == after
+    return exact
 
 
 def main(argv=None):
@@ -800,7 +1201,14 @@ def main(argv=None):
     s = sub.add_parser("obj", help="export positions and triangles to Wavefront OBJ")
     s.add_argument("file")
     s.add_argument("output")
+    s.add_argument("--textures", action="store_true",
+                   help="also decode each material's texture to a PNG beside it")
     s.set_defaults(func=cmd_obj)
+
+    s = sub.add_parser("materials",
+                       help="what shades what: meshes, materials and textures")
+    s.add_argument("file")
+    s.set_defaults(func=cmd_materials)
 
     s = sub.add_parser("check", help="measure the vertex decode against the geometry")
     s.add_argument("files", nargs="+")
