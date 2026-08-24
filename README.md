@@ -1,5 +1,15 @@
 # pc-infiniteundiscovery
 
+*Everything written here is falsifiable and should be read that way. These are
+our own findings, arrived at by looking at the shipped data from the outside:
+no source, no documentation, no contact with anyone who worked on the game. A
+claim survives here because nothing has contradicted it yet, not because it has
+been confirmed. Where a conclusion rests on measurement the measurement is
+given, so it can be checked and, if wrong, overturned — and past sessions have
+already had findings retracted for exactly that reason. Nothing in this
+repository should be taken as established fact about how the game actually
+works until a full recompilation demonstrates it.*
+
 Reverse engineering notes, file format documentation and analysis tooling for
 **Infinite Undiscovery** (tri-Ace / Square Enix, Xbox 360, 2008).
 
