@@ -109,5 +109,6 @@ as by arithmetic.
 What remains is the internal structure of the payloads themselves: `ASF `
 scenes, `AAF ` animations and `ACF ` collision. Those are now plain files
 sitting behind tools that work, rather than questions blocked on compression.
-See [`docs/sessions/`](docs/sessions/) for the running log of what has been
-established and what is still open.
+[`TODO.md`](TODO.md) lists what is still open, and
+[`docs/sessions/`](docs/sessions/) is the running log of how each piece was
+established.
