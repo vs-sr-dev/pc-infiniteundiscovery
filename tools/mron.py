@@ -64,6 +64,7 @@ MAGIC = b"MRON00.2"
 GAP_MAGICS = [
     (b"SLZ", "SLZ compressed block"),
     (bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c"), "ASF/WMV stream"),
+    (b"AAC ", "AAC audio bank"),
     (b"RIFF", "RIFF"),
 ]
 
@@ -75,7 +76,7 @@ KNOWN_TAGS = {
     "MTEX": "texture, material-bound (AIF, or a nested archive)",
     "TTEX": "texture",
     "IMG-": "image (AIF)",
-    "SOND": "sound",
+    "SOND": "sound bank (AAC)",
     "AREA": "area / level",
     "NODE": "scene node",
     "COLL": "collision",

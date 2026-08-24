@@ -45,8 +45,9 @@ stored vertices are not in.
 8. **`NODE` payloads**, which carry no magic at all, and **`TTD-`**, whose
    payload begins `DTT\0`.
 
-9. **The first `0x16000` bytes of disc 1's `ud1.bin`**, before the first
-   archive. Unchanged since session 1.
+9. **The first `0x16000` bytes of each `ud1.bin`**, before the first archive.
+   Unchanged since session 1, and now the *only* gap in all four containers
+   that is not accounted for: session 5 identified the rest as audio banks.
 
 10. **The ASF/WMV video runs** in the container gaps — they need splitting into
    individual movies.
@@ -60,6 +61,16 @@ stored vertices are not in.
 
 12. **Disc 2.** Everything established so far was measured on disc 1. Disc 2 has
     been walked but its containers have not been put through the same checks.
+    Its audio has: the same banks as disc 1, plus one track disc 1 lacks.
+
+13. **The `AAC ` leftovers**, small and self-contained after session 5: the
+    eight-byte field at `WAVE +0x08`, constant `0x995A7C80_00000015` in 2404
+    sounds and zero elsewhere; what the sample count at `+0x24` counts exactly;
+    and the `PLBK` playback record, whose shape is known but whose 23 values
+    have never been checked against what the engine does with them.
+
+14. **Five missing music tracks** — the numbers 35, 45, 46, 55 and 74 appear on
+    neither disc. Cut, or somewhere not yet walked.
 
 ## Verified, needs no further work
 
@@ -70,3 +81,4 @@ stored vertices are not in.
 * SLZ / XCompress — [docs/formats/slz.md](docs/formats/slz.md)
 * AIF textures — [docs/formats/aif.md](docs/formats/aif.md)
 * ASF scenes, container and geometry — [docs/formats/asf.md](docs/formats/asf.md)
+* AAC audio, and where the music lives — [docs/formats/aac.md](docs/formats/aac.md)

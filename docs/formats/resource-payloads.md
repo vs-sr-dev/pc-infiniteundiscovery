@@ -14,7 +14,7 @@ once.
 | `IMG-` | `AIF ` | Aska Image File |
 | `MAIF` | `AIF ` | also an image |
 | `RMD-` | `AIF ` | a font atlas, followed by message data |
-| `SOND` | `AAC ` | AAC audio |
+| `SOND` | `AAC ` | [Aska Audio Container](aac.md) — XMA2 |
 | `MESH` | `SLZ` → `ASF ` | Aska Scene File, compressed |
 | `MTEX` | `SLZ` → `AIF ` | image, compressed — or a nested archive |
 | `SCE-` | `SLZ` → `-CNS00.3` | `SNC-` version 3.00, compressed |
@@ -59,7 +59,11 @@ vocabulary a "mesh" resource is a scene file. Three tags (`IMG-`, `MAIF`,
 about format.
 
 `SOND` payloads are `AAC `, which matches the debug string
-`AAC version problem  BGM ID=%d` found in the executable.
+`AAC version problem  BGM ID=%d` found in the executable. It is not MPEG AAC:
+see [aac.md](aac.md). The four bytes are tri-Ace's own, and what they wrap is
+XMA2, the Xbox 360's codec. Note that `AAC ` breaks the `A?F` naming above —
+the trailing letter is a C, and the payload is a directory of many named sounds
+rather than one asset, so "container" rather than "file" is the reading.
 
 ## Self-describing lengths
 

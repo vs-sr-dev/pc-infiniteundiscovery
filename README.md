@@ -58,6 +58,7 @@ docs/sessions/ chronological work log
 | `tools/slz.py` | The SLZ compressed-resource wrapper, with bulk self-verification against payload self-reported lengths. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, geometry to Wavefront OBJ, and the textures embedded in each model. |
+| `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
 
@@ -78,6 +79,15 @@ python tools/aif.py png  extract/textures/317BD800_003_MTEX.aif texture.png
 python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag MESH --decompress extract/models
 python tools/asf.py info extract/models/000A4000_006_MESH.asf
 python tools/asf.py obj  extract/models/000A4000_006_MESH.asf sword.obj
+
+# Walk the music, which sits between the archives rather than inside them
+python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
+python tools/aac.py info "path/to/disc1.iso" --offset 0x8E75C000 --length 3842048
+python tools/aac.py xma  "path/to/disc1.iso" music/ --offset 0x8E75C000 --length 3842048
+
+# Pull out the sound effects and voice, then check every container
+python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag SOND --decompress extract/sound
+python tools/aac.py verify extract/sound/*.bin
 
 # Recover the executable, then read its class inventory
 python tools/xex.py  info    extract/disc1/default.xex
@@ -109,6 +119,9 @@ Container offsets for the European release are tabulated in
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource
   holds. A chunk tree carrying geometry, materials, embedded textures and a
   named node graph.
+* [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
+  every sound in the game, named with the filename it was built from, wrapping
+  XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
 * [XDBF](docs/formats/xdbf.md) — the title metadata database, achievements
   included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this
@@ -120,11 +133,13 @@ Container offsets for the European release are tabulated in
 ## Status
 
 The disc layout, the container format, the executable, the resource-payload
-vocabulary, the compression, the texture format and the scene container are
-solved. All 1 812 SLZ blocks in disc 1's `ud1.bin` decompress with no failures;
-all 220 image resources decode to correct pixels; and 400 `MESH` resources
-parse without error into 3 855 objects and 1.3 million triangles, 98.4 % of
-which reproduce the bounding boxes the files state independently.
+vocabulary, the compression, the texture format, the scene container and the
+audio are solved. All 1 812 SLZ blocks in disc 1's `ud1.bin` decompress with no
+failures; all 220 image resources decode to correct pixels; 400 `MESH`
+resources parse without error into 3 855 objects and 1.3 million triangles,
+98.4 % of which reproduce the bounding boxes the files state independently; and
+every one of the 22 243 sounds in disc 1's `ud1.bin` passes its checks, with
+all 79 music tracks decoding through a standard XMA2 decoder.
 
 What remains is finer: the non-position parts of a vertex, and the `AAF `
 animation and `ACF ` collision formats. Those are now plain files sitting

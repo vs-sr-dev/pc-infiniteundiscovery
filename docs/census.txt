@@ -8,27 +8,28 @@ tag       count          bytes  meaning
 ANIM       5718      278141072  animation
 SIG-       2594         988360  signal / trigger
 MESH       1505      481220784  geometry
-SOND       1275      219564200  sound
+SOND       1275      219564200  sound bank (AAC)
 COLL        972        1314180  collision
-SEEK        908         138848  UNKNOWN -- new tag
+SEEK        908         138848  unknown, small and numerous -- seek table?
 EPAC        463      143464816  packed data (E)
-WEAP        217       38645248  UNKNOWN -- new tag
-IMG-        141       37127700  image
-MTEX        109       30742620  texture, material-bound
-SKAC         98       15009724  UNKNOWN -- new tag
+WEAP        217       38645248  weapon (identical set on both discs)
+IMG-        141       37127700  image (AIF)
+MTEX        109       30742620  texture, material-bound (AIF, or a nested archive)
+SKAC         98       15009724  unknown, travels with skeletons
 APAC         54       28300460  packed data (A)
 TTD-         11          23676  unknown
-MAIF         11         248020  unknown
+MAIF         11         248020  image (AIF)
 AREA         10          48352  area / level
-RMD-          5        2903656  unknown
+RMD-          5        2903656  message resource -- font atlas (AIF) plus text data
 NODE          4         798252  scene node
 SCE-          4         433164  scene
-MINI          4            656  UNKNOWN -- new tag
+MINI          4            656  unknown, ~16 bytes each
 TTEX          4         475392  texture
 
 gap kind                    count          bytes
 ------------------------ -------- --------------
-unclassified                    3      289812480
+AAC audio bank                  2      289722368
+unclassified                    1          90112
 SLZ compressed block            1        3055616
 ASF/WMV stream                  1      630495232
 
@@ -40,28 +41,28 @@ archives  : 80 in 40 distinct groups
 tag       count          bytes  meaning
 ------ -------- --------------  ------------------------
 EPAC       3340     1188100064  packed data (E)
-MTEX       1258      395048464  texture, material-bound
+MTEX       1258      395048464  texture, material-bound (AIF, or a nested archive)
 APAC        997      481355780  packed data (A)
 MESH        474      112616504  geometry
 ANIM        379        2939856  animation
-SOND        283       59611252  sound
+SOND        283       59611252  sound bank (AAC)
 COLL        203         157624  collision
 SIG-        197          15840  signal / trigger
-MAIF        105        5926192  unknown
+MAIF        105        5926192  image (AIF)
 AREA         84         552384  area / level
-SEEK         63         166336  UNKNOWN -- new tag
+SEEK         63         166336  unknown, small and numerous -- seek table?
 SCE-         40        3061016  scene
 NODE         40        4275416  scene node
-MINI         40           6512  UNKNOWN -- new tag
-IMG-         32        6821672  image
-RMD-         31        4817912  unknown
+MINI         40           6512  unknown, ~16 bytes each
+IMG-         32        6821672  image (AIF)
+RMD-         31        4817912  message resource -- font atlas (AIF) plus text data
 TTEX         25        3315264  texture
-LNS-          2           2656  UNKNOWN -- new tag
+LNS-          2           2656  unknown, rare
 TTD-          1            164  unknown
 
 gap kind                    count          bytes
 ------------------------ -------- --------------
-unclassified                   21      135483392
+AAC audio bank                 21      135483392
 ASF/WMV stream                  1      389175296
 
 ########## DISC 2 / ud1.bin ##########
@@ -74,26 +75,27 @@ tag       count          bytes  meaning
 ANIM       5755      277996810  animation
 SIG-       2619         990296  signal / trigger
 MESH       1544      491617796  geometry
-SOND       1281      219484088  sound
+SOND       1281      219484088  sound bank (AAC)
 COLL        976        1308500  collision
-SEEK        921         154880  UNKNOWN -- new tag
-MTEX        708      220047776  texture, material-bound
+SEEK        921         154880  unknown, small and numerous -- seek table?
+MTEX        708      220047776  texture, material-bound (AIF, or a nested archive)
 APAC        620      300496748  packed data (A)
-WEAP        217       38645248  UNKNOWN -- new tag
-IMG-        172       43291284  image
-SKAC         98       15009724  UNKNOWN -- new tag
-MAIF         45        1917596  unknown
+WEAP        217       38645248  weapon (identical set on both discs)
+IMG-        172       43291284  image (AIF)
+SKAC         98       15009724  unknown, travels with skeletons
+MAIF         45        1917596  image (AIF)
 AREA         18         141792  area / level
 NODE         17        2607456  scene node
 SCE-         17          39984  scene
-MINI         16           2768  UNKNOWN -- new tag
-RMD-         14        2548220  unknown
+MINI         16           2768  unknown, ~16 bytes each
+RMD-         14        2548220  message resource -- font atlas (AIF) plus text data
 TTD-         11          23676  unknown
 TTEX          1          69696  texture
 
 gap kind                    count          bytes
 ------------------------ -------- --------------
-unclassified                    4      295182336
+AAC audio bank                  3      295092224
+unclassified                    1          90112
 SLZ compressed block            1        3055616
 ASF/WMV stream                  1     1297813504
 
@@ -105,26 +107,26 @@ archives  : 80 in 40 distinct groups
 tag       count          bytes  meaning
 ------ -------- --------------  ------------------------
 EPAC       3340     1188100064  packed data (E)
-MTEX       1258      395048464  texture, material-bound
+MTEX       1258      395048464  texture, material-bound (AIF, or a nested archive)
 APAC        997      481355780  packed data (A)
 MESH        474      112616504  geometry
 ANIM        379        2939856  animation
-SOND        283       59611252  sound
+SOND        283       59611252  sound bank (AAC)
 COLL        203         157624  collision
 SIG-        197          15840  signal / trigger
-MAIF        105        5926192  unknown
+MAIF        105        5926192  image (AIF)
 AREA         84         552384  area / level
-SEEK         63         166336  UNKNOWN -- new tag
+SEEK         63         166336  unknown, small and numerous -- seek table?
 SCE-         40        3061016  scene
 NODE         40        4275416  scene node
-MINI         40           6512  UNKNOWN -- new tag
-IMG-         32        6821672  image
-RMD-         31        4817912  unknown
+MINI         40           6512  unknown, ~16 bytes each
+IMG-         32        6821672  image (AIF)
+RMD-         31        4817912  message resource -- font atlas (AIF) plus text data
 TTEX         25        3315264  texture
-LNS-          2           2656  UNKNOWN -- new tag
+LNS-          2           2656  unknown, rare
 TTD-          1            164  unknown
 
 gap kind                    count          bytes
 ------------------------ -------- --------------
-unclassified                   21      135483392
+AAC audio bank                 21      135483392
 ASF/WMV stream                  1      878632960
