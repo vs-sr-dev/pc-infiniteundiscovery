@@ -1,0 +1,130 @@
+########## DISC 1 / ud1.bin ##########
+container : Infinite Undiscovery (Europe) (Disc 1).iso
+region    : offset 0x6589E800, length 2207584256 bytes (2.06 GiB)
+archives  : 1198 in 740 distinct groups
+
+tag       count          bytes  meaning
+------ -------- --------------  ------------------------
+ANIM       5718      278141072  animation
+SIG-       2594         988360  signal / trigger
+MESH       1505      481220784  geometry
+SOND       1275      219564200  sound
+COLL        972        1314180  collision
+SEEK        908         138848  UNKNOWN -- new tag
+EPAC        463      143464816  packed data (E)
+WEAP        217       38645248  UNKNOWN -- new tag
+IMG-        141       37127700  image
+MTEX        109       30742620  texture, material-bound
+SKAC         98       15009724  UNKNOWN -- new tag
+APAC         54       28300460  packed data (A)
+TTD-         11          23676  unknown
+MAIF         11         248020  unknown
+AREA         10          48352  area / level
+RMD-          5        2903656  unknown
+NODE          4         798252  scene node
+SCE-          4         433164  scene
+MINI          4            656  UNKNOWN -- new tag
+TTEX          4         475392  texture
+
+gap kind                    count          bytes
+------------------------ -------- --------------
+unclassified                    3      289812480
+SLZ compressed block            1        3055616
+ASF/WMV stream                  1      630495232
+
+########## DISC 1 / ud2.bin ##########
+container : Infinite Undiscovery (Europe) (Disc 1).iso
+region    : offset 0xE99D0000, length 2800330752 bytes (2.61 GiB)
+archives  : 80 in 40 distinct groups
+
+tag       count          bytes  meaning
+------ -------- --------------  ------------------------
+EPAC       3340     1188100064  packed data (E)
+MTEX       1258      395048464  texture, material-bound
+APAC        997      481355780  packed data (A)
+MESH        474      112616504  geometry
+ANIM        379        2939856  animation
+SOND        283       59611252  sound
+COLL        203         157624  collision
+SIG-        197          15840  signal / trigger
+MAIF        105        5926192  unknown
+AREA         84         552384  area / level
+SEEK         63         166336  UNKNOWN -- new tag
+SCE-         40        3061016  scene
+NODE         40        4275416  scene node
+MINI         40           6512  UNKNOWN -- new tag
+IMG-         32        6821672  image
+RMD-         31        4817912  unknown
+TTEX         25        3315264  texture
+LNS-          2           2656  UNKNOWN -- new tag
+TTD-          1            164  unknown
+
+gap kind                    count          bytes
+------------------------ -------- --------------
+unclassified                   21      135483392
+ASF/WMV stream                  1      389175296
+
+########## DISC 2 / ud1.bin ##########
+container : Infinite Undiscovery (Europe) (Disc 2).iso
+region    : offset 0x28ACC000, length 3217651712 bytes (3.00 GiB)
+archives  : 1224 in 753 distinct groups
+
+tag       count          bytes  meaning
+------ -------- --------------  ------------------------
+ANIM       5755      277996810  animation
+SIG-       2619         990296  signal / trigger
+MESH       1544      491617796  geometry
+SOND       1281      219484088  sound
+COLL        976        1308500  collision
+SEEK        921         154880  UNKNOWN -- new tag
+MTEX        708      220047776  texture, material-bound
+APAC        620      300496748  packed data (A)
+WEAP        217       38645248  UNKNOWN -- new tag
+IMG-        172       43291284  image
+SKAC         98       15009724  UNKNOWN -- new tag
+MAIF         45        1917596  unknown
+AREA         18         141792  area / level
+NODE         17        2607456  scene node
+SCE-         17          39984  scene
+MINI         16           2768  UNKNOWN -- new tag
+RMD-         14        2548220  unknown
+TTD-         11          23676  unknown
+TTEX          1          69696  texture
+
+gap kind                    count          bytes
+------------------------ -------- --------------
+unclassified                    4      295182336
+SLZ compressed block            1        3055616
+ASF/WMV stream                  1     1297813504
+
+########## DISC 2 / ud2.bin ##########
+container : Infinite Undiscovery (Europe) (Disc 2).iso
+region    : offset 0xE99D0000, length 3289788416 bytes (3.06 GiB)
+archives  : 80 in 40 distinct groups
+
+tag       count          bytes  meaning
+------ -------- --------------  ------------------------
+EPAC       3340     1188100064  packed data (E)
+MTEX       1258      395048464  texture, material-bound
+APAC        997      481355780  packed data (A)
+MESH        474      112616504  geometry
+ANIM        379        2939856  animation
+SOND        283       59611252  sound
+COLL        203         157624  collision
+SIG-        197          15840  signal / trigger
+MAIF        105        5926192  unknown
+AREA         84         552384  area / level
+SEEK         63         166336  UNKNOWN -- new tag
+SCE-         40        3061016  scene
+NODE         40        4275416  scene node
+MINI         40           6512  UNKNOWN -- new tag
+IMG-         32        6821672  image
+RMD-         31        4817912  unknown
+TTEX         25        3315264  texture
+LNS-          2           2656  UNKNOWN -- new tag
+TTD-          1            164  unknown
+
+gap kind                    count          bytes
+------------------------ -------- --------------
+unclassified                   21      135483392
+ASF/WMV stream                  1      878632960

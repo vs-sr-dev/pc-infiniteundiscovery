@@ -1,0 +1,47 @@
+# ---------------------------------------------------------------------------
+# Nothing derived from the retail disc may ever be committed.
+# This repository holds tools and documentation only.
+# ---------------------------------------------------------------------------
+
+# Disc images and the archives they came in
+*.iso
+*.7z
+*.zip
+*.rar
+iso/
+
+# Anything extracted from a disc
+extract/
+work/
+dump/
+
+# Raw game assets / executables, wherever they land
+*.xex
+*.xbe
+*.pck
+*.dat
+*.bin
+*.pak
+*.arc
+*.wav
+*.xma
+*.wma
+*.bik
+*.wmv
+*.dds
+*.png
+*.jpg
+*.tga
+
+# Generated large reports (regenerate with the tools instead)
+*.filelist.txt
+*.strings.txt
+
+# Python / editor noise
+__pycache__/
+*.pyc
+.venv/
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
