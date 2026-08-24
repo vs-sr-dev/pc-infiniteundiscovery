@@ -43,6 +43,9 @@ docs/sessions/ chronological work log
 | `tools/mron.py` | Walk the NORM/MRON resource containers (`ud1.bin`, `ud2.bin`): list archives, dump a per-entry CSV, or take a census by resource type. Reads in place inside a disc image, so the 12 GB of containers never need extracting. |
 | `tools/xex.py` | Read and decrypt XEX2 Xbox 360 executables: full header dump with structured decoding, plus recovery of the PE image. Falls back to a bundled pure-Python AES when pycryptodome is absent. |
 | `tools/rtti.py` | Recover a C++ class inventory from the MSVC RTTI type descriptors in a decrypted PE. Demangles namespaces, nested types and templates. |
+| `tools/xdbf.py` | Read the XDBF title-metadata database embedded in the executable: achievements in every shipped language, string tables, embedded PNGs. |
+| `tools/lzx.py` | LZX decompressor for the XCompress variant, written from the published algorithm. |
+| `tools/slz.py` | The SLZ compressed-resource wrapper, with bulk self-verification against payload self-reported lengths. |
 
 ### Quick start
 
@@ -59,6 +62,7 @@ python tools/xex.py  info    extract/disc1/default.xex
 python tools/xex.py  extract extract/disc1/default.xex extract/disc1/default.exe
 python tools/rtti.py groups  extract/disc1/default.exe
 python tools/rtti.py list    extract/disc1/default.exe --filter "Aska::"
+python tools/xdbf.py achievements extract/disc1/default.exe
 ```
 
 Container offsets for the European release are tabulated in
@@ -73,6 +77,12 @@ Container offsets for the European release are tabulated in
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
   holds essentially all of the game's content.
+* [Resource payloads](docs/formats/resource-payloads.md) — what each resource
+  tag actually contains, and the `A?F` file-kind family.
+* [SLZ](docs/formats/slz.md) — the compressed-resource wrapper, which turns out
+  to be Microsoft XCompress. Partially solved; the largest open problem here.
+* [XDBF](docs/formats/xdbf.md) — the title metadata database, achievements
+  included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this
   title's header values.
 * [XDVDFS](docs/formats/xdvdfs.md) — the on-disc filesystem, fully specified.
@@ -81,6 +91,8 @@ Container offsets for the European release are tabulated in
 
 ## Status
 
-The disc layout, the container format and the executable are solved; resource
-payload formats mostly are not. See [`docs/sessions/`](docs/sessions/) for the running log of what has been
+The disc layout, the container format, the executable and the resource-payload
+vocabulary are solved. Decompression is the bottleneck: SLZ is mapped and its
+decoder verified, but only about 12% of blocks currently decode end to end, and
+most of the game's content sits behind it. See [`docs/sessions/`](docs/sessions/) for the running log of what has been
 established and what is still open.
