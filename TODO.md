@@ -8,10 +8,12 @@ Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 
 ## Now the main line of work
 
-**1. `ASF ` — the Aska Scene File.** 916 of the 1 812 compressed blocks in disc
-1's `ud1.bin`, and what every `MESH` resource decompresses to. It stores its own
-length at offset 4 and nothing else about it is known. This is the largest
-remaining unknown, and geometry is behind it.
+**1. The rest of an ASF vertex.** Positions and triangles come out; normals,
+texture coordinates and skinning weights do not. Several readings of the
+remaining fields were tested against each mesh's own texture and none produced
+UV islands matching what is drawn there. The vertex descriptor at `vlas +0x04`
+is the obvious lead — its low nibble already selects the position format, so
+the other nibbles very likely describe the other attributes.
 
 **2. `AAF ` animation and `ACF ` collision.** Both are plain readable files now.
 The engine's RTTI already names the collision primitives — capsule, cube and
@@ -21,29 +23,39 @@ a head start.
 **3. `-CNS` / `SNC-` scene data**, from `SCE-` resources. Only four blocks, but
 scene scripting is likely to explain a lot of the rest.
 
+**4. The ASF chunks nobody has opened:** `ml__`/`mats` (materials — these would
+connect geometry to the embedded textures), `rl__` (render list), `bnpl`/`bnpi`
+(bone pools, so skeletons), `ptcl`/`pprn`/`pani` (particles), and `modf`,
+`extl`, `PAIF`, `AAIF`, `ACHF`, `rnel`, `glbl`, `mdfr`, `anim`.
+
+**5. The 59 ASF objects in 3 855 whose geometry misses their stated bounding
+box** by more than 10 %. They are mostly treasure chests and morph targets —
+things whose geometry moves — which suggests the box describes a pose the
+stored vertices are not in.
+
 ## Smaller and self-contained
 
-4. **AIF mip chains.** The base level decodes. The Xbox 360 packs the small mip
+6. **AIF mip chains.** The base level decodes. The Xbox 360 packs the small mip
    levels into a shared tile, and working that out would complete the texture
    format.
 
-5. **The unidentified AIF fields**: the `u32` at `0x24`, which varies per asset,
+7. **The unidentified AIF fields**: the `u32` at `0x24`, which varies per asset,
    and the flags at `0x34` (`0x500`, `0x200`, `0x40400`, zero).
 
-6. **`NODE` payloads**, which carry no magic at all, and **`TTD-`**, whose
+8. **`NODE` payloads**, which carry no magic at all, and **`TTD-`**, whose
    payload begins `DTT\0`.
 
-7. **The first `0x16000` bytes of disc 1's `ud1.bin`**, before the first
+9. **The first `0x16000` bytes of disc 1's `ud1.bin`**, before the first
    archive. Unchanged since session 1.
 
-8. **The ASF/WMV video runs** in the container gaps — they need splitting into
+10. **The ASF/WMV video runs** in the container gaps — they need splitting into
    individual movies.
 
-9. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
+11. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
    `Aska::AofObject`, `Aska::DirectAofHandler`) but never seen as a payload
    magic on disc.
 
-10. **Disc 2.** Everything established so far was measured on disc 1. Disc 2 has
+12. **Disc 2.** Everything established so far was measured on disc 1. Disc 2 has
     been walked but its containers have not been put through the same checks.
 
 ## Verified, needs no further work
@@ -54,3 +66,4 @@ scene scripting is likely to explain a lot of the rest.
 * XDBF title metadata — [docs/formats/xdbf.md](docs/formats/xdbf.md)
 * SLZ / XCompress — [docs/formats/slz.md](docs/formats/slz.md)
 * AIF textures — [docs/formats/aif.md](docs/formats/aif.md)
+* ASF scenes, container and geometry — [docs/formats/asf.md](docs/formats/asf.md)

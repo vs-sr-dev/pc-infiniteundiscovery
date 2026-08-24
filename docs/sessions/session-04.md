@@ -1,4 +1,4 @@
-# Session 4 — SLZ solved, and the textures come out
+# Session 4 — SLZ solved, then the textures and the models come out
 
 **Date:** 2026-08-24
 **Goal:** open question 1 from [session 3](session-03.md) — the two unknowns
@@ -8,8 +8,9 @@ content.
 ## Outcome
 
 Both unknowns turned out to be the same thing, and it was not a tri-Ace
-invention at all. With SLZ closed, the session went on to the format sitting
-directly behind it, and textures now decode end to end.
+invention at all. Closing it opened everything behind it, so the session kept
+going: textures decode end to end, and so does the geometry. Three formats
+went from blocked to readable — SLZ, AIF and ASF.
 
 ## SLZ: there was no chunk prefix and no inter-block gap
 
@@ -138,6 +139,84 @@ atlases, damage-number sheets. Every AIF also carries a four-character asset
 identifier whose prefix groups it — `CH` character (106), `BG` background (74),
 `EF` effect (21), `PG` interface (14).
 
+## ASF: what every MESH resource holds
+
+With SLZ and AIF closed, the session carried on into the format behind them.
+`ASF ` is 916 of the 1 812 compressed blocks in disc 1's `ud1.bin` and the
+largest single format in the game.
+
+It is not one mesh. It is a small scene, stored as a tree of chunks with a
+uniform 16-byte header, and the walk is exact: follow each chunk's step and you
+land on the end of its parent, with the file closing on a 16-byte `eof_`.
+
+Two details cost time and are worth recording:
+
+* A chunk's children do not always start right after its header — `ao__` puts
+  0xA0 bytes of its own first, `tree` 0xB0, `mess` 0x10. Rather than hard-code
+  that table, the reader finds the child region by requiring an exact tiling of
+  the rest of the body, and the table above is what it converges on.
+* `vlas` states an **unrounded** step, so a chunk holding one stops a few zero
+  bytes short of its parent's end. Requiring exactness there silently dropped
+  1 782 of 4 398 meshes — they parsed as having no vertex data at all rather
+  than failing, which is the kind of quiet loss that only a total shows up in.
+
+### The names survived
+
+`tree` holds one `attr` per node, each opening with a 16-byte ASCII name, and
+they are the artists' own. One model's tree reads `ROOT`, `R:M:SK_WEP01`
+through `R:M:SK_WEP09`, `R:M:CAPEL_WEAPON` — Capell is the protagonist.
+Another is the opening logo sequence with its camera: `camera1_group`,
+`camera1`, `camera1_aim`, then `SQ`, `TM`, `R`, `MS`, `Tri_ace`. Others carry
+Maya defaults like `pPlaneShape6`.
+
+### Geometry, and how it was proved
+
+`mess` states a vertex count and an index count. `idxl` and `vlas` each give
+the offset to their bulk data, which always lands on a 4096-byte boundary of
+the file. Indices are 16-bit and always a multiple of three, so triangle lists.
+
+The vertex stride is stated at `vlas +0x08` and is also derivable by dividing
+the data region by the vertex count; the two agreed on every mesh measured. It
+is not fixed — 12 through 44 bytes occur.
+
+The position is stored either as three half floats or three 32-bit floats, and
+the low nibble of the descriptor at `vlas +0x04` says which: `0x8` half, `0x1`
+and `0x4` float. Nothing else occurs, and all 4 398 meshes fall into one of the
+three.
+
+That mapping was not read off a hardware enum. Every `ao__` states an
+**oriented bounding box** — a centre, three axis directions and a half-extent
+along each — in full 32-bit floats, written by whatever exported the model from
+geometry this reader only ever sees in a lossier form. Projecting decoded
+vertices onto those axes and comparing is therefore a check against numbers
+from outside the decode, and the nibble is simply which reading passes it.
+
+Over the first 400 `MESH` resources: **400 walks closing on `eof_`, zero parse
+errors**, 3 855 objects, 4 398 meshes, 1 025 173 vertices, 1 304 004 triangles,
+1 253 embedded textures. **98.4 % of objects reproduce their stated bounding
+box to within one percent**, 92.1 % to within a tenth of one.
+
+The check itself had to be fixed first. Scaling the error per axis reported
+*infinite* error on every flat object — billboards, decal planes, one extent of
+exactly zero — turning perfect decodes into apparent catastrophes. Scaling by
+the object's largest extent instead removed the whole phantom class.
+
+### Looking at it
+
+Numbers are one thing. Exporting positions and triangles and drawing a
+wireframe gives a sword: blade, crossguard, pommel, under a node called
+`R:M:CAPEL_WEAPON`. The embedded texture, once decoded, is that sword's
+material sheet.
+
+### What was left alone
+
+The rest of the vertex — normals, texture coordinates, skinning weights — is
+not understood. Candidate readings of the remaining fields were rendered as UV
+overlays on each mesh's own texture, and none traced the islands drawn there,
+so they are recorded as unknown rather than guessed at.
+
+Write-up: [formats/asf.md](../formats/asf.md).
+
 ## Tools
 
 * `tools/lzx.py` — rewritten around frames. The decoder is now stateful, and
@@ -149,13 +228,18 @@ identifier whose prefix groups it — `CH` character (106), `BG` background (74)
 * `tools/mron.py` — new `extract` subcommand, which writes entry payloads out
   as files and optionally decompresses them, closing the last manual step
   between a disc image and a tool's input.
+* `tools/asf.py` — new. Chunk tree, node graph, geometry to Wavefront OBJ,
+  embedded texture extraction, and a bounding-box self-check.
 
 ## Left open
 
-1. **Internal structure of `ASF `** — 916 of the compressed blocks, and the
-   biggest remaining unknown. `MESH` resources decompress to it.
+1. **The rest of an ASF vertex** — normals, texture coordinates, skinning. The
+   descriptor at `vlas +0x04` is the lead: its low nibble already picks the
+   position format, so the other nibbles probably describe the rest.
 2. `AAF ` animation and `ACF ` collision, likewise now plain readable files.
-3. AIF mip chains. The base level decodes; the Xbox 360 packs small mip levels
+3. The ASF chunks nobody has opened: `ml__`/`mats` materials, `rl__`,
+   `bnpl`/`bnpi` bone pools, `ptcl`/`pprn`/`pani` particles.
+4. AIF mip chains. The base level decodes; the Xbox 360 packs small mip levels
    into a shared tile, which has not been worked out.
 4. `NODE` payloads, which carry no magic, and `TTD-`.
 5. The first `0x16000` bytes of disc 1's `ud1.bin`. Unchanged since session 1.

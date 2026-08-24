@@ -100,7 +100,8 @@ import zlib
 
 MAGIC = b"AIF "
 SUBCHUNK = b"imgX"
-HEADER_SIZE = 0x1000
+PAGE = 0x1000
+MIN_HEADER = 0x30
 TILE = 32
 
 FMT_ARGB4444 = 0x46
@@ -147,9 +148,19 @@ def tiled_offset(x, y, width_elements, element_bytes):
 
 
 class AifImage:
-    def __init__(self, data):
+    def __init__(self, data, base=0):
+        """`base` is where this payload started inside whatever contained it.
+
+        Pixel data does not begin at a fixed offset within the payload. It
+        begins at the next 4096-byte boundary of the *containing file*, which
+        for a standalone AIF is 0x1000 and for one embedded in an ASF at, say,
+        0xD0 is 0xF30. Getting this wrong shifts every row of the texture and
+        produces a smeared image rather than an obvious failure.
+        """
         if data[:4] != MAGIC:
             raise AifError("not an AIF payload")
+        self.base = base
+        self.data_offset = align_up(base + MIN_HEADER, PAGE) - base
         self.data = data
         self.total_size = struct.unpack_from(">I", data, 4)[0]
         if data[0x10:0x14] != SUBCHUNK:
@@ -186,7 +197,7 @@ class AifImage:
         `data_size` counts the base level only, so the mip chain shows up as
         the difference between it and the payload's own total length.
         """
-        return max(0, self.total_size - HEADER_SIZE - self.data_size)
+        return max(0, self.total_size - self.data_offset - self.data_size)
 
     def has_mipmaps(self):
         return self.mipmap_bytes() > 0
@@ -195,7 +206,8 @@ class AifImage:
 
     def untiled(self):
         """Return the base mip level as linear, PC-order element data."""
-        raw = self.data[HEADER_SIZE:HEADER_SIZE + self.base_level_size()]
+        start = self.data_offset
+        raw = self.data[start:start + self.base_level_size()]
         if len(raw) < self.base_level_size():
             raise AifError("pixel data is %d bytes short"
                            % (self.base_level_size() - len(raw)))
@@ -346,13 +358,13 @@ def write_png(path, width, height, rgba):
 
 # -- commands --------------------------------------------------------------
 
-def load(path):
+def load(path, base=0):
     with open(path, "rb") as fh:
-        return AifImage(fh.read())
+        return AifImage(fh.read(), base)
 
 
 def cmd_info(args):
-    image = load(args.file)
+    image = load(args.file, args.base)
     print("identifier   : %r" % image.identifier)
     print("total size   : %d" % image.total_size)
     print("format       : 0x%02X  %s" % (image.format, image.format_name))
@@ -362,6 +374,7 @@ def cmd_info(args):
           % (image.elements_x, image.elements_y, image.element_bytes))
     print("pitch        : %d  (%d elements, padded from %d)"
           % (image.pitch, image.tiled_width, image.elements_x))
+    print("data at      : 0x%X (base 0x%X)" % (image.data_offset, image.base))
     print("data size    : %d" % image.data_size)
     print("base level   : %d bytes" % image.base_level_size())
     print("mipmaps      : %s" % ("%d bytes beyond the base level"
@@ -371,7 +384,7 @@ def cmd_info(args):
 
 
 def cmd_png(args):
-    image = load(args.file)
+    image = load(args.file, args.base)
     rgba = image.to_rgba()
     write_png(args.output, image.width, image.height, rgba)
     print("wrote %s: %d x %d from %s"
@@ -385,11 +398,15 @@ def main(argv=None):
 
     s = sub.add_parser("info", help="print the header")
     s.add_argument("file")
+    s.add_argument("--base", type=lambda x: int(x, 0), default=0,
+                   help="offset this payload had inside its container")
     s.set_defaults(func=cmd_info)
 
     s = sub.add_parser("png", help="decode the base mip level to a PNG")
     s.add_argument("file")
     s.add_argument("output")
+    s.add_argument("--base", type=lambda x: int(x, 0), default=0,
+                   help="offset this payload had inside its container")
     s.set_defaults(func=cmd_png)
 
     args = p.parse_args(argv)

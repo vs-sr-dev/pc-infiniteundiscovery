@@ -57,6 +57,7 @@ docs/sessions/ chronological work log
 | `tools/lzx.py` | LZX decompressor for the XCompress variant, written from the published algorithm. Frame-based and stateful, which is what the format actually requires. |
 | `tools/slz.py` | The SLZ compressed-resource wrapper, with bulk self-verification against payload self-reported lengths. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
+| `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, geometry to Wavefront OBJ, and the textures embedded in each model. |
 
 ### Quick start
 
@@ -69,9 +70,14 @@ python tools/xdvdfs.py extract "path/to/disc1.iso" extract/disc1
 python tools/mron.py census "path/to/disc1.iso" --offset 1703536640 --length 2207584256
 
 # Pull out every texture, decompressing as needed, and turn one into a PNG
-python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640     --length 2207584256 --tag MTEX --decompress extract/textures
+python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag MTEX --decompress extract/textures
 python tools/aif.py info extract/textures/317BD800_003_MTEX.aif
 python tools/aif.py png  extract/textures/317BD800_003_MTEX.aif texture.png
+
+# Pull out a model, look at its scene tree, and export the geometry
+python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag MESH --decompress extract/models
+python tools/asf.py info extract/models/000A4000_006_MESH.asf
+python tools/asf.py obj  extract/models/000A4000_006_MESH.asf sword.obj
 
 # Recover the executable, then read its class inventory
 python tools/xex.py  info    extract/disc1/default.xex
@@ -100,6 +106,9 @@ Container offsets for the European release are tabulated in
   decompress, with nothing left unexplained.
 * [AIF](docs/formats/aif.md) — the Aska Image File: every texture in the game,
   stored in the Xbox 360 GPU's own tiled layout.
+* [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource
+  holds. A chunk tree carrying geometry, materials, embedded textures and a
+  named node graph.
 * [XDBF](docs/formats/xdbf.md) — the title metadata database, achievements
   included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this
@@ -111,14 +120,15 @@ Container offsets for the European release are tabulated in
 ## Status
 
 The disc layout, the container format, the executable, the resource-payload
-vocabulary, the compression and the texture format are solved. All 1 812 SLZ
-blocks in disc 1's `ud1.bin` decompress with no failures, and all 220 image
-resources decode to correct pixels — 150.9 megapixels, checked by eye as well
-as by arithmetic.
+vocabulary, the compression, the texture format and the scene container are
+solved. All 1 812 SLZ blocks in disc 1's `ud1.bin` decompress with no failures;
+all 220 image resources decode to correct pixels; and 400 `MESH` resources
+parse without error into 3 855 objects and 1.3 million triangles, 98.4 % of
+which reproduce the bounding boxes the files state independently.
 
-What remains is the internal structure of the payloads themselves: `ASF `
-scenes, `AAF ` animations and `ACF ` collision. Those are now plain files
-sitting behind tools that work, rather than questions blocked on compression.
+What remains is finer: the non-position parts of a vertex, and the `AAF `
+animation and `ACF ` collision formats. Those are now plain files sitting
+behind tools that work, rather than questions blocked on compression.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.
