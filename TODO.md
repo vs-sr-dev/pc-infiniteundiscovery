@@ -53,7 +53,10 @@ stored vertices are not in.
 
 11. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
    `Aska::AofObject`, `Aska::DirectAofHandler`) but never seen as a payload
-   magic on disc.
+   magic on disc. One lead turned up while reading ASF: the chunk holding a
+   single object is tagged `ao__`, and `Aska::AofObject` is what the engine
+   calls an object. That is a resemblance between two names and nothing more,
+   but it is the first place to look.
 
 12. **Disc 2.** Everything established so far was measured on disc 1. Disc 2 has
     been walked but its containers have not been put through the same checks.
