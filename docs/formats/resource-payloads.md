@@ -13,10 +13,10 @@ once.
 | `COLL` | `ACF ` | Aska Collision File |
 | `IMG-` | `AIF ` | Aska Image File |
 | `MAIF` | `AIF ` | also an image |
-| `RMD-` | `AIF ` | also an image |
+| `RMD-` | `AIF ` | a font atlas, followed by message data |
 | `SOND` | `AAC ` | AAC audio |
 | `MESH` | `SLZ` → `ASF ` | Aska Scene File, compressed |
-| `MTEX` | `SLZ` → `AIF ` | image, compressed |
+| `MTEX` | `SLZ` → `AIF ` | image, compressed — or a nested archive |
 | `SCE-` | `SLZ` → `-CNS00.3` | `SNC-` version 3.00, compressed |
 | `SKAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
 | `APAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
@@ -76,6 +76,11 @@ Six tags contain another NORM archive rather than a leaf format — `EPAC`,
 the container structure recurses, and `tools/mron.py` can be pointed at a
 decompressed payload as readily as at a disc image.
 
+`MTEX` is a seventh, but only sometimes: of its entries in disc 1's `ud1.bin`,
+most hold an image and 46 hold a nested archive. So the tag says what the
+resource is *for*, and the payload magic says what it *is* — the two are worth
+keeping apart.
+
 ## The versioned magics
 
 Several payloads use the same convention as the container itself: a
@@ -93,9 +98,28 @@ MRON00.2  ->  NORM  2.00
 close enough to be the same concept ("scene") under two spellings, but that is
 a reading rather than a finding.
 
+## What the image payloads turned out to be
+
+`AIF ` is now fully readable — see [aif.md](aif.md). Decoding all 220 images in
+disc 1's `ud1.bin` settled two of the tags above:
+
+* **`RMD-` is a message resource, not just an image.** Its `AIF ` is a font
+  atlas — a grid of outlined glyphs covering Latin, kana and kanji. In three
+  cases the same SLZ stream continues past the end of the image with the ASCII
+  string `MessageConvertLib_1.0.0.0`, a build-tool version left in the shipped
+  data, which is what the second half of an `RMD-` resource is.
+* **`MTEX` is material-bound texture**, including normal-map atlases that pack
+  four ground or wall surfaces into a single 1024x1024 sheet.
+
+`IMG-` covers user interface art: the title screen logo, button and control
+atlases, damage-number sheets. Every `AIF ` also carries a four-character asset
+identifier whose prefix groups it — `CH` character, `BG` background, `EF`
+effect, `PG` interface.
+
 ## Reproducing
 
 ```
-python tools/mron.py scan  <image> --offset N --length N --csv entries.csv
+python tools/mron.py scan    <image> --offset N --length N --csv entries.csv
+python tools/mron.py extract <image> --offset N --length N --tag MTEX --decompress out/
 python tools/slz.py decompress <image> --offset <entry offset> out.bin
 ```

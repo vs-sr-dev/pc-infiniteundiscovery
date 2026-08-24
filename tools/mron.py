@@ -38,9 +38,10 @@ possible without any index.
 
 Usage
 -----
-    python tools/mron.py scan   <file> [--offset N] [--length N]
-    python tools/mron.py scan   <file> --csv entries.csv
-    python tools/mron.py census <file> [--offset N] [--length N]
+    python tools/mron.py scan    <file> [--offset N] [--length N]
+    python tools/mron.py scan    <file> --csv entries.csv
+    python tools/mron.py census  <file> [--offset N] [--length N]
+    python tools/mron.py extract <file> --tag MTEX --decompress <outdir>
 
 `--offset` and `--length` let the tool read a container in place inside a disc
 image, so ud1.bin and ud2.bin never have to be extracted.  Get the numbers from
@@ -71,20 +72,20 @@ GAP_MAGICS = [
 KNOWN_TAGS = {
     "MESH": "geometry",
     "ANIM": "animation",
-    "MTEX": "texture, material-bound",
+    "MTEX": "texture, material-bound (AIF, or a nested archive)",
     "TTEX": "texture",
-    "IMG-": "image",
+    "IMG-": "image (AIF)",
     "SOND": "sound",
     "AREA": "area / level",
     "NODE": "scene node",
     "COLL": "collision",
     "SCE-": "scene",
     "SIG-": "signal / trigger",
-    "MAIF": "unknown",
+    "MAIF": "image (AIF)",
     "EPAC": "packed data (E)",
     "APAC": "packed data (A)",
     "TTD-": "unknown",
-    "RMD-": "unknown",
+    "RMD-": "message resource -- font atlas (AIF) plus text data",
     "WEAP": "weapon (identical set on both discs)",
     "SKAC": "unknown, travels with skeletons",
     "SEEK": "unknown, small and numerous -- seek table?",
@@ -268,6 +269,66 @@ def cmd_scan(args):
     return 0
 
 
+def cmd_extract(args):
+    """Write chosen entries out as files, optionally decompressing them.
+
+    Payload bytes are what every other tool in this repository wants as input,
+    and slicing them out by hand from a 2 GB container is the one step that
+    was still manual.
+    """
+    con = open_container(args)
+    wanted = set(args.tag) if args.tag else None
+
+    unwrap = None
+    if args.decompress:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import slz
+        unwrap = slz
+
+    if not os.path.isdir(args.outdir):
+        os.makedirs(args.outdir)
+
+    written = skipped = failed = 0
+    for item in con.walk():
+        if isinstance(item, Gap):
+            continue
+        for index, entry in enumerate(item.entries):
+            if wanted is not None and entry["tag"] not in wanted:
+                continue
+            if args.limit and written >= args.limit:
+                print("stopped at the --limit of %d" % args.limit)
+                return 0
+            blob = con.read(item.offset + entry["offset"], entry["size"])
+            suffix = "bin"
+            if unwrap is not None and blob[:3] == unwrap.MAGIC:
+                try:
+                    total = (struct.unpack_from(">I", blob, 8)[0]
+                             + unwrap.WRAPPER_SIZE)
+                    blob = unwrap.SlzBlock(blob[:total]).decompress()
+                except Exception as exc:                 # noqa: BLE001
+                    print("   0x%08X entry %d (%s): %s"
+                          % (item.offset, index, entry["tag"], exc))
+                    failed += 1
+                    continue
+            magic = blob[:4]
+            if magic == b"AIF ":
+                suffix = "aif"
+            elif magic in (b"ASF ", b"AAF ", b"ACF "):
+                suffix = magic.strip().decode("latin-1").lower()
+            elif magic == b"MRON":
+                suffix = "mron"
+            name = "%08X_%03d_%s.%s" % (item.offset, index,
+                                        entry["tag"].strip("-"), suffix)
+            with open(os.path.join(args.outdir, name), "wb") as fo:
+                fo.write(blob)
+            written += 1
+
+    print("wrote %d files to %s" % (written, args.outdir))
+    if skipped or failed:
+        print("skipped %d, failed %d" % (skipped, failed))
+    return 0
+
+
 def cmd_census(args):
     con = open_container(args)
     tags = collections.Counter()
@@ -313,6 +374,7 @@ def main(argv=None):
     for name, func, helptext in (
         ("scan", cmd_scan, "walk the container, listing archives and gaps"),
         ("census", cmd_census, "summarise resource types and gap kinds"),
+        ("extract", cmd_extract, "write entry payloads out as files"),
     ):
         s = sub.add_parser(name, help=helptext)
         s.add_argument("file", help="ud1.bin / ud2.bin, or a disc image")
@@ -322,6 +384,14 @@ def main(argv=None):
                        help="length of the container in bytes")
         if name == "scan":
             s.add_argument("--csv", help="write every entry to a CSV instead")
+        if name == "extract":
+            s.add_argument("outdir", help="directory to write payloads into")
+            s.add_argument("--tag", action="append",
+                           help="only this resource tag; repeatable")
+            s.add_argument("--decompress", action="store_true",
+                           help="unwrap SLZ-compressed payloads on the way out")
+            s.add_argument("--limit", type=int, default=0,
+                           help="stop after this many files")
         s.set_defaults(func=func)
 
     args = p.parse_args(argv)

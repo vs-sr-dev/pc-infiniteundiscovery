@@ -32,10 +32,32 @@ Aligned-offset blocks add a fourth Huffman tree carrying the low 3 bits of each
 distance, which pays off when distances cluster on a stride -- exactly the case
 for arrays of fixed-size records.
 
+Frames, and why they are the whole story
+----------------------------------------
+LZX does not decode a bitstream straight through. Output is cut into **frames**
+of exactly 32 768 bytes, and the input is cut with it: each frame's compressed
+bytes are a separate run, and the bit reader restarts, byte-aligned, at the
+start of every one. Whoever wraps LZX decides how the frame boundaries are
+found -- CAB, WIM, XNB and XCompress all differ there, and none of it is part
+of LZX itself. See `slz.py` for how XCompress marks them.
+
+What matters here is that **everything except the bit reader survives a frame
+boundary**: the Huffman tables, R0/R1/R2, and above all the current block and
+how much of it is left. Blocks routinely span several frames, so a decoder that
+expects a block header at the start of each frame is reading Huffman tables out
+of the middle of coded data. It will resynchronise often enough to look like it
+almost works, which is the worst possible failure mode.
+
+State is therefore held on the decoder, not in a local, and `reset()` marks the
+points where the encoder genuinely started over.
+
 Usage
 -----
-    from lzx import LzxDecoder
-    LzxDecoder(window_bits=17).decompress(data, expected_length)
+    dec = LzxDecoder(window_bits=17)
+    out = bytearray()
+    for data, length in frames:          # 32 KB each, the last one shorter
+        dec.decode_frame(data, length, out)
+    dec.reset()                          # only where the stream restarts
 """
 
 from __future__ import annotations
@@ -51,6 +73,8 @@ PRETREE_ELEMENTS = 20
 ALIGNED_ELEMENTS = 8
 NUM_PRIMARY_LENGTHS = 7
 NUM_SECONDARY_LENGTHS = 249
+
+FRAME_SIZE = 0x8000
 
 # Position slots available for each window size, indexed by window bits.
 POSITION_SLOTS = {15: 30, 16: 32, 17: 34, 18: 36, 19: 38, 20: 42, 21: 50}
@@ -183,6 +207,13 @@ class HuffmanTable:
 
 
 class LzxDecoder:
+    """A stateful LZX stream. Feed it one frame at a time.
+
+    The decoder holds everything that outlives a frame -- Huffman tables, the
+    repeated offsets, and the block currently being decoded -- because in LZX
+    only the bit reader restarts at a frame boundary.
+    """
+
     def __init__(self, window_bits=17):
         if window_bits not in POSITION_SLOTS:
             raise LzxError("unsupported window size: %d bits" % window_bits)
@@ -190,6 +221,21 @@ class LzxDecoder:
         self.window_size = 1 << window_bits
         self.num_position_slots = POSITION_SLOTS[window_bits]
         self.main_elements = NUM_CHARS + (self.num_position_slots << 3)
+        self.reset()
+
+    def reset(self):
+        """Start a fresh stream: new tables, new offsets, header unread."""
+        self.main_lengths = [0] * self.main_elements
+        self.length_lengths = [0] * (NUM_SECONDARY_LENGTHS + 1)
+        self.main_table = None
+        self.length_table = None
+        self.aligned_table = None
+        self.block_type = 0
+        self.block_remaining = 0
+        self.r0 = self.r1 = self.r2 = 1
+        self.header_read = False
+        self.intel_filesize = 0
+        self._raw = None          # byte cursor inside an uncompressed block
 
     # -- match copying -----------------------------------------------------
 
@@ -265,128 +311,84 @@ class LzxDecoder:
                 lengths[i] = (lengths[i] - symbol) % 17
                 i += 1
 
+    # -- block headers -----------------------------------------------------
+
+    def _read_block_header(self, reader, data):
+        self.block_type = reader.read(3)
+        self.block_remaining = ((reader.read(8) << 16) | (reader.read(8) << 8)
+                                | reader.read(8))
+        if self.block_remaining == 0:
+            raise LzxError("zero-length block")
+
+        if self.block_type == BLOCKTYPE_ALIGNED:
+            self.aligned_table = HuffmanTable(
+                [reader.read(3) for _ in range(ALIGNED_ELEMENTS)], table_bits=7)
+
+        if self.block_type in (BLOCKTYPE_VERBATIM, BLOCKTYPE_ALIGNED):
+            self._read_lengths(reader, self.main_lengths, 0, NUM_CHARS)
+            self._read_lengths(reader, self.main_lengths, NUM_CHARS,
+                               self.main_elements)
+            self.main_table = HuffmanTable(self.main_lengths, table_bits=11)
+            self._read_lengths(reader, self.length_lengths, 0,
+                               NUM_SECONDARY_LENGTHS)
+            self.length_table = HuffmanTable(self.length_lengths, table_bits=11)
+        elif self.block_type == BLOCKTYPE_UNCOMPRESSED:
+            # Raw bytes, preceded by the three repeated offsets. Note these are
+            # stored little-endian, unlike everything else on this console.
+            reader.align_to_word()
+            position = reader.byte_position()
+            self.r0 = int.from_bytes(data[position:position + 4], "little")
+            self.r1 = int.from_bytes(data[position + 4:position + 8], "little")
+            self.r2 = int.from_bytes(data[position + 8:position + 12], "little")
+            self._raw = position + 12
+        else:
+            raise LzxError("unknown block type %d" % self.block_type)
+
     # -- main loop ---------------------------------------------------------
 
-    def _resync(self, reader, remaining):
-        """Find the next block header after an inter-block gap.
+    def decode_frame(self, data, out_length, out):
+        """Decode one frame of `out_length` bytes, appending to `out`.
 
-        Returns True with the reader positioned on the header, False if no
-        candidate was found. Candidates are ranked: a header whose declared
-        length is exactly the chunk's remaining output is taken immediately,
-        since that is what a final block looks like; otherwise the first
-        syntactically valid one is used.
-
-        This is a workaround, not a specification. Whatever occupies the gap
-        between blocks has not been identified, so the decoder locates the
-        header empirically rather than pretending to know the rule.
+        `data` is just this frame's compressed bytes. The bit reader is local
+        to the call -- that is the entire meaning of a frame boundary -- while
+        every other piece of state lives on the decoder and carries over.
         """
-        saved = (reader.pos, reader.buf, reader.count)
-        fallback = None
-        for skip in range(0, 97):
-            reader.pos, reader.buf, reader.count = saved
-            try:
-                if skip:
-                    reader.read(skip)
-                block_type = reader.read(3)
-                block_length = ((reader.read(8) << 16) | (reader.read(8) << 8)
-                                | reader.read(8))
-            except (IndexError, ValueError):
-                continue
-            if block_type not in (BLOCKTYPE_VERBATIM, BLOCKTYPE_ALIGNED):
-                continue
-            if not 0 < block_length <= remaining:
-                continue
-            if block_length == remaining:
-                reader.pos, reader.buf, reader.count = saved
-                if skip:
-                    reader.read(skip)
-                return True
-            if fallback is None:
-                fallback = skip
-        reader.pos, reader.buf, reader.count = saved
-        if fallback is None:
-            return False
-        if fallback:
-            reader.read(fallback)
-        return True
-
-    def decode_chunk(self, data, out_length, out=None, skip_bytes=0):
-        """Decode one chunk, appending to `out` so the window carries over.
-
-        XCompress splits a stream into chunks. Each chunk restarts the
-        bitstream -- fresh E8 flag, fresh Huffman tables -- but the LZX
-        *window* is shared, so a match late in the stream may reach back into
-        an earlier chunk. Passing the same `out` buffer through every chunk is
-        what gives that continuity; decoding chunks independently produces
-        plausible-looking garbage a few chunks in.
-
-        `skip_bytes` drops the chunk's leading prefix, whose length varies.
-        """
-        if out is None:
-            out = bytearray()
         target = len(out) + out_length
+        reader = BitReader(data)
 
-        reader = BitReader(data[skip_bytes:])
-        if reader.read(1):
-            reader.read(16)
-            reader.read(16)
-
-        main_lengths = [0] * self.main_elements
-        length_lengths = [0] * (NUM_SECONDARY_LENGTHS + 1)
-        r0 = r1 = r2 = 1
-        block_index = 0
+        if not self.header_read:
+            if reader.read(1):
+                self.intel_filesize = (reader.read(16) << 16) | reader.read(16)
+            self.header_read = True
+        if self._raw is not None:
+            # An uncompressed block that ran off the end of the previous frame
+            # simply continues with this frame's first byte.
+            self._raw = 0
 
         while len(out) < target:
-            remaining = target - len(out)
-            if block_index:
-                # Blocks inside one chunk are not bit-contiguous: something
-                # sits between them. In the cases measured it works out to
-                # "pad to a byte boundary, then 32 bits", but that rule does
-                # not hold everywhere, so resynchronise by looking for the
-                # next header instead of assuming a fixed gap.
-                if not self._resync(reader, remaining):
-                    break
-
-            block_type = reader.read(3)
-            block_length = (reader.read(8) << 16) | (reader.read(8) << 8) | reader.read(8)
-            if block_length == 0:
-                break
-
-            if block_type == BLOCKTYPE_UNCOMPRESSED:
-                reader.align_to_word()
-                start = reader.byte_position()
-                r0 = int.from_bytes(data[start:start + 4], "little")
-                r1 = int.from_bytes(data[start + 4:start + 8], "little")
-                r2 = int.from_bytes(data[start + 8:start + 12], "little")
-                start += 12
-                out += data[start:start + block_length]
-                consumed = start + block_length
-                if consumed & 1:
-                    consumed += 1
-                reader.pos = consumed
-                reader.buf = 0
-                reader.count = 0
-                block_index += 1
+            if self.block_remaining == 0:
+                self._raw = None
+                self._read_block_header(reader, data)
                 continue
 
-            if block_type not in (BLOCKTYPE_VERBATIM, BLOCKTYPE_ALIGNED):
-                raise LzxError("unknown block type %d" % block_type)
+            want = min(self.block_remaining, target - len(out))
 
-            aligned_table = None
-            if block_type == BLOCKTYPE_ALIGNED:
-                aligned_table = HuffmanTable(
-                    [reader.read(3) for _ in range(ALIGNED_ELEMENTS)], table_bits=7)
-
-            self._read_lengths(reader, main_lengths, 0, NUM_CHARS)
-            self._read_lengths(reader, main_lengths, NUM_CHARS, self.main_elements)
-            main_table = HuffmanTable(main_lengths, table_bits=11)
-
-            self._read_lengths(reader, length_lengths, 0, NUM_SECONDARY_LENGTHS)
-            length_table = HuffmanTable(length_lengths, table_bits=11)
+            if self.block_type == BLOCKTYPE_UNCOMPRESSED:
+                take = min(want, len(data) - self._raw)
+                out += data[self._raw:self._raw + take]
+                self._raw += take
+                self.block_remaining -= take
+                if self.block_remaining == 0:
+                    end = self._raw + (self._raw & 1)
+                    reader.pos, reader.buf, reader.count = end, 0, 0
+                    self._raw = None
+                if take < want:
+                    break
+                continue
 
             produced = 0
-            while produced < block_length:
-                symbol = main_table.decode(reader)
+            while produced < want:
+                symbol = self.main_table.decode(reader)
                 if symbol < NUM_CHARS:
                     out.append(symbol)
                     produced += 1
@@ -395,46 +397,48 @@ class LzxDecoder:
                 symbol -= NUM_CHARS
                 match_length = symbol & NUM_PRIMARY_LENGTHS
                 if match_length == NUM_PRIMARY_LENGTHS:
-                    match_length += length_table.decode(reader)
+                    match_length += self.length_table.decode(reader)
                 match_length += MIN_MATCH
 
                 slot = symbol >> 3
                 if slot == 0:
-                    offset = r0
+                    offset = self.r0
                 elif slot == 1:
-                    offset = r1
-                    r1 = r0
-                    r0 = offset
+                    offset = self.r1
+                    self.r1 = self.r0
+                    self.r0 = offset
                 elif slot == 2:
-                    offset = r2
-                    r2 = r0
-                    r0 = offset
+                    offset = self.r2
+                    self.r2 = self.r0
+                    self.r0 = offset
                 else:
                     extra = EXTRA_BITS[slot]
-                    if block_type == BLOCKTYPE_ALIGNED and extra >= 3:
+                    if self.block_type == BLOCKTYPE_ALIGNED and extra >= 3:
                         verbatim = reader.read(extra - 3) << 3 if extra > 3 else 0
                         offset = POSITION_BASE[slot] - 2 + verbatim
-                        offset += aligned_table.decode(reader)
+                        offset += self.aligned_table.decode(reader)
                     else:
                         offset = POSITION_BASE[slot] - 2 + reader.read(extra)
-                    r2, r1, r0 = r1, r0, offset
+                    self.r2, self.r1, self.r0 = self.r1, self.r0, offset
 
-                # A block produces exactly its declared length. A match that
-                # would overrun is clipped: letting it through shifts every
-                # later byte and silently corrupts the rest of the stream.
-                if produced + match_length > block_length:
-                    match_length = block_length - produced
+                # A match may run past the end of the frame -- frames are an
+                # output-side division, invisible to the encoder -- but never
+                # past the end of the block. Clip it there.
+                if produced + match_length > self.block_remaining:
+                    match_length = self.block_remaining - produced
                 self._copy_match(out, offset, match_length)
                 produced += match_length
 
-            block_index += 1
+            self.block_remaining -= produced
 
         return out
 
-    def decompress(self, data, out_length):
-        """Decode a single self-contained chunk."""
-        return bytes(self.decode_chunk(data, out_length)[:out_length])
 
-
-def decompress(data, out_length, window_bits=17):
-    return LzxDecoder(window_bits).decompress(data, out_length)
+def decompress_frames(frames, window_bits=17, out=None):
+    """Decode a whole stream: `frames` yields (compressed bytes, length)."""
+    decoder = LzxDecoder(window_bits)
+    if out is None:
+        out = bytearray()
+    for data, length in frames:
+        decoder.decode_frame(data, length, out)
+    return out

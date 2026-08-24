@@ -48,42 +48,36 @@ compressed region in every block tested, and the largest size seen always
 equals the field at 0x44. An entry holding an SLZ block is padded so that
 `entry size == align_up(compressed size, 4) + 24`.
 
-Two things make decoding harder than the layout suggests
---------------------------------------------------------
-**The window is shared across chunks.** Each chunk restarts the bitstream --
-fresh E8 flag, fresh Huffman tables -- but the LZX window carries over, so a
-match late in the stream reaches back into an earlier chunk. Decoding chunks
-independently yields plausible-looking garbage a few chunks in.
+Frames inside a chunk
+---------------------
+A chunk is not one LZX bitstream. It decodes to 0x20000 bytes, and LZX works
+in **frames** of 0x8000, so an ordinary chunk holds four of them, each with its
+own compressed run introduced by a short size header:
 
-**Each chunk payload opens with a prefix of unknown meaning and varying
-length.** Two bytes is the ordinary case; one and five have both been observed,
-the latter on a short final chunk. `find_stream_start` locates the bitstream by
-trying each offset and keeping the first whose block header decodes sanely.
+    ff  hh ll  hh ll   extended: 16-bit output length, then 16-bit input length
+    hh ll              ordinary: 16-bit input length, output length is 0x8000
 
-Status
-------
-Partial, and worth being precise about. The container is fully mapped and the
-LZX decoder is correct: blocks that decode end to end produce payloads whose
-own self-reported length matches the wrapper's, a value the compressor never
-touches. But only about **12% of blocks (25 of 200 sampled) decode completely**.
+The extended form is what a short frame needs, so it turns up as the last frame
+of the last chunk -- and, since the marker is `0xFF`, also whenever an ordinary
+frame would compress to 0xFF00 bytes or more.
 
-Two things remain unexplained, and both are worked around by searching rather
-than by knowing the rule:
+This is the framing XNB files use for LZX as well; it is XCompress's, not
+LZX's. Walking it is exact rather than probabilistic: every frame header lands
+where the previous frame's byte count says it should, the walk finishes on the
+last byte of the chunk payload, and the output lengths sum to the chunk's
+uncompressed size. That holds for every chunk of every block tested.
 
-* what the chunk prefix holds, and what decides its length;
-* what sits between two blocks *inside* one chunk. Measured cases come out to
-  "pad to a byte boundary, then 32 bits", but that does not hold everywhere.
-
-Where the rule is unknown the decoder locates the next block header by trying
-offsets and ranking the candidates. That recovers a good deal, and it fails
-loudly rather than quietly, but it is a workaround and the remaining failures
-are its cost.
+**A chunk is an independent LZX stream**: Huffman tables, repeated offsets and
+the E8 header all restart at a chunk boundary, and `LzxDecoder.reset()` marks
+it. Within a chunk they do not restart at frame boundaries -- only the bit
+reader does -- and blocks routinely span all four frames. Getting that backwards
+is what makes an LZX decoder appear to half-work.
 
 Verification
 ------------
 `ASF `, `AIF ` and `AAF ` payloads all store their own length at offset 4, so a
 decode can be checked against something the compressor never wrote.
-`slz.py verify` does exactly that and reports the rate honestly.
+`slz.py verify` does exactly that and reports the rate.
 
 Usage
 -----
@@ -102,14 +96,16 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lzx import BitReader, LzxDecoder, LzxError  # noqa: E402
+from lzx import LzxDecoder, LzxError  # noqa: E402
 
 MAGIC = b"SLZ"
 XCOMPRESS_MAGIC = 0x0FF512EE
 
 WRAPPER_SIZE = 0x18
 STREAM_HEADER_SIZE = 0x30
-CHUNK_HEADER_SIZE = 6
+
+FRAME_EXTENDED = 0xFF
+DEFAULT_FRAME_SIZE = 0x8000
 
 
 class SlzError(Exception):
@@ -153,49 +149,51 @@ class SlzBlock:
             produced += want
             pos += 4 + size
 
-    def find_stream_start(self, payload, want):
-        """Locate the LZX bitstream inside a chunk payload.
+    @staticmethod
+    def frames(payload, want):
+        """Split a chunk payload into its LZX frames.
 
-        Every chunk payload opens with a short prefix before the bitstream --
-        two bytes in the ordinary case, but one and five have both been seen,
-        and what the prefix holds has not been worked out. Rather than guess,
-        try each plausible offset and read the block header there.
-
-        Candidates are ranked, not just accepted: a chunk is usually one block
-        covering the whole chunk, so an offset whose declared block length is
-        exactly `want` beats one that merely looks plausible. Taking the first
-        syntactically valid offset instead picks the wrong prefix often enough
-        to matter.
+        Each frame is introduced by its compressed length as a 16-bit
+        big-endian value; a leading 0xFF switches to the extended form, which
+        states the output length first. Output is 0x8000 bytes otherwise.
         """
-        candidates = []
-        for skip in range(0, 9):
-            try:
-                reader = BitReader(payload[skip:])
-                if reader.read(1):
-                    reader.read(16)
-                    reader.read(16)
-                block_type = reader.read(3)
-                block_length = ((reader.read(8) << 16) | (reader.read(8) << 8)
-                                | reader.read(8))
-            except (IndexError, ValueError):
-                continue
-            if block_type not in (1, 2) or not 0 < block_length <= want:
-                continue
-            if block_length == want:
-                return skip
-            candidates.append(skip)
-        if not candidates:
-            raise SlzError("no chunk prefix length yields a valid LZX block header")
-        # Two bytes is by far the most common prefix, so prefer it when the
-        # length test could not decide.
-        return 2 if 2 in candidates else candidates[0]
+        out = []
+        pos = 0
+        produced = 0
+        while pos < len(payload):
+            if payload[pos] == FRAME_EXTENDED:
+                if pos + 5 > len(payload):
+                    raise SlzError("extended frame header past end of chunk")
+                length = (payload[pos + 1] << 8) | payload[pos + 2]
+                size = (payload[pos + 3] << 8) | payload[pos + 4]
+                pos += 5
+            else:
+                if pos + 2 > len(payload):
+                    raise SlzError("frame header past end of chunk")
+                size = (payload[pos] << 8) | payload[pos + 1]
+                length = DEFAULT_FRAME_SIZE
+                pos += 2
+            if pos + size > len(payload):
+                raise SlzError("frame of %d bytes overruns the chunk" % size)
+            out.append((payload[pos:pos + size], length))
+            produced += length
+            pos += size
+        if pos != len(payload):
+            raise SlzError("frame walk ended at %d of %d bytes"
+                           % (pos, len(payload)))
+        if produced != want:
+            raise SlzError("frames produce %d bytes, chunk wants %d"
+                           % (produced, want))
+        return out
 
     def decompress(self):
         decoder = LzxDecoder(self.window_bits)
         out = bytearray()
         for payload, want in self.chunks():
-            skip = self.find_stream_start(payload, want)
-            decoder.decode_chunk(payload, want, out, skip_bytes=skip)
+            # Every chunk restarts the LZX stream.
+            decoder.reset()
+            for data, length in self.frames(payload, want):
+                decoder.decode_frame(data, length, out)
         if len(out) < self.uncompressed_size:
             raise SlzError("stream ended %d bytes short"
                            % (self.uncompressed_size - len(out)))
@@ -238,9 +236,15 @@ def cmd_info(args):
                                             block.stream_uncompressed))
     print("chunk size        : 0x%X" % block.chunk_size)
     print("largest chunk     : %d" % block.max_chunk_compressed)
-    info = [(len(p), block.find_stream_start(p, w)) for p, w in block.chunks()]
-    print("chunks            : %d" % len(info))
-    print("  (payload bytes, prefix length): %s" % (info[:10],))
+    chunks = list(block.chunks())
+    print("chunks            : %d" % len(chunks))
+    for index, (payload, want) in enumerate(chunks[:8]):
+        frames = block.frames(payload, want)
+        print("  chunk %-3d %7d bytes -> %6d, %d frames %s"
+              % (index, len(payload), want, len(frames),
+                 [len(d) for d, _ in frames]))
+    if len(chunks) > 8:
+        print("  ... %d more" % (len(chunks) - 8))
     return 0
 
 
@@ -259,10 +263,23 @@ def cmd_decompress(args):
 
 
 def cmd_verify(args):
-    """Decompress many blocks and check each against its payload's own size."""
+    """Decompress many blocks and check each against its payload's own size.
+
+    Four outcomes, and the distinction between them matters:
+
+    * the payload's own length matches the decode exactly -- confirmed;
+    * the payload declares a length shorter than the decode. That is not a
+      failure: the compressed stream carries more than one thing, and the
+      trailing bytes are coherent data rather than noise -- another payload,
+      or in several cases a build-tool signature string;
+    * the payload has no length field, or leaves it zero -- nothing to check;
+    * the payload declares a length longer than the decode. That one really is
+      a failure, because it means output went missing.
+    """
     rows = list(csv.DictReader(open(args.csv, encoding="utf-8")))
     fh = open(args.image, "rb")
-    checked = confirmed = unchecked = 0
+    checked = confirmed = unchecked = unclaimed = trailing = 0
+    magics = {}
     failures = []
     for row in rows:
         if args.limit and checked >= args.limit:
@@ -283,19 +300,30 @@ def cmd_verify(args):
             checked += 1
             continue
         checked += 1
+        magics[out[:4]] = magics.get(out[:4], 0) + 1
         declared = payload_self_size(out)
         if declared is None:
             unchecked += 1
+        elif declared == 0:
+            unclaimed += 1
         elif declared == len(out):
             confirmed += 1
+        elif declared < len(out):
+            trailing += 1
         else:
             failures.append((row["tag"], offset,
-                             "self-reported %d, got %d" % (declared, len(out))))
+                             "self-reported %d, got %d -- output is missing"
+                             % (declared, len(out))))
 
     print("decompressed          : %d blocks" % checked)
     print("self-size confirmed   : %d" % confirmed)
-    print("no self-size to check : %d" % unchecked)
+    print("payload plus trailing : %d" % trailing)
+    print("length field unused   : %d" % unclaimed)
+    print("no length field       : %d" % unchecked)
     print("failures              : %d" % len(failures))
+    print("payload magics        : %s"
+          % ", ".join("%r x%d" % (m, n) for m, n in sorted(
+              magics.items(), key=lambda kv: -kv[1])))
     for tag, offset, reason in failures[:20]:
         print("   %-5s at 0x%X: %s" % (tag, offset, reason))
     return 1 if failures else 0
