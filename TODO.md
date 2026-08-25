@@ -222,35 +222,77 @@ The questions that came out of it, none of which is about this disc:
     `0x10`. Something sits between the magic and the chunks, and 58 of 613
     sampled headers carry the tag `PS3 `.
 
-22. **The codecs behind `SLZ` on PlayStation and PlayStation 3.** Half
-    answered. **Method 1 is solved** — tri-Ace's own LZ77, specified in
+22. **The codecs behind `SLZ`.** Half answered, and the open half is now the
+    most valuable question in this file.
+
+    **Method 1 is solved** — tri-Ace's own LZ77, specified in
     [docs/formats/slz.md §2b](docs/formats/slz.md#2b-the-playstation-codec-method-1),
     decoding **1 762 of 1 762** sampled blocks across four titles from 1998 to
-    2006 with no failures and no change to the specification.
+    2006 with no failures and no change to the specification, plus 8 of 8 files
+    in a fifth title by a different studio once two nibbles are swapped.
 
-    **Method 2 is not, and it is the prize.** It is on every one of the five
-    PlayStation and PlayStation 2 discs — 2 303 of 2 546 blocks on the 1998
-    disc alone — and it has never decoded. It is not method 1 under another
-    number. The best haystack is the smallest: Star Ocean 2's `SCUS_944.21` is
-    128 KB of MIPS with the `SLZ` string sitting directly on top of its own
-    function-pointer table, against Star Ocean 3's 751 KB.
+    **Method 2 is the prize.** Read the table before deciding what to spend a
+    session on:
+
+    | Title | Year | Method-2 blocks or files | Share of what was sampled |
+    | --- | --- | ---: | --- |
+    | SO: The Second Story, PS1 | 1998 | 2 303 | 90 % |
+    | Valkyrie Profile, PS1 | 1999 | 1 627 | 69 % |
+    | Star Ocean 3, PS2 | 2003 | 482 | 23 % |
+    | Radiata Stories, PS2 | 2005 | 2 | — |
+    | Valkyrie Profile 2, PS2 | 2006 | 390 | 44 % |
+    | Eternal Sonata, X360 | 2007 | 13 files | 1 % — but method **3** is 948, 86 % |
+
+    Six titles, three studios' worth of build pipelines, eighteen years apart
+    at the extremes, and one unread compressor sitting in the second slot of
+    the same numbering in all of them.
+
+    **What has been ruled out**, so nobody repeats it:
+
+    * it is not stored, and not method 1 under a different number;
+    * it is not plain LZSS — 480 combinations of offset width, length width,
+      byte order, minimum match, flag polarity and bit order, against 60
+      PlayStation 3 blocks;
+    * it is **not byte-flag framed at all**, which is proved rather than
+      inferred. `btldata/voice/bos01.csf` in Eternal Sonata is method 3 and its
+      stored siblings are all `CSF `, so its first decompressed byte is `C`;
+      its first byte on disc has bit 0 clear, which under that framing puts a
+      back-reference at output position zero. An 896-candidate search — 14 byte
+      splits, 4 length biases, both bit orders, both polarities, four header
+      skips — finds nothing on either method 2 or method 3.
+
+    So a wider blind search is not the way in. **Read the decompressor.** Two
+    haystacks, smallest first:
+
+    1. **Eternal Sonata, `default.xex`.** `xex.py extract` writes a flat
+       5 767 168-byte PowerPC image loaded at `0x82000000`, so a file offset is
+       an RVA. The anchor is the string **`index.vmtoc` at `+0x82E92`**
+       (`0x82082E92`): find what reads it, follow to the code that switches on
+       the method byte at record `+0x24`, and three decompressors are behind
+       that switch — one of which is already known, which is a free check that
+       the right function was found. `capstone` is installed.
+    2. **Star Ocean 2, `SCUS_944.21`.** 128 KB of MIPS, `PS-X EXE` loaded at
+       `0x80010000` from file offset `0x800`. `SLZ\0` sits in an eight-byte
+       slot **twice**, at `0x1B060` and `0x1B30C` — `0x8002A860` and
+       `0x8002AB0C` in memory — each followed directly by a table of
+       `0x8001xxxx` function pointers. Smaller image, older code, and the same
+       free check.
+
+    **What would count as a result:** the block decodes to exactly the size its
+    header states while consuming its input to the last byte, on a corpus
+    rather than one specimen, the way method 1 was settled. Anything less is a
+    guess that happened to land.
 
     **Method 3 is separately open, and separately interesting**: it does not
     exist on either PlayStation disc and is the default on all three
-    PlayStation 2 ones, so the codec set grew between 1999 and 2003.
+    PlayStation 2 ones, so the codec set grew between 1999 and 2003. In Eternal
+    Sonata it is the default too, at 948 of 1 105 files — so on that title the
+    same disassembly answers both.
 
-    The **PlayStation 3** methods are open too: same numbering, same stored
+    The **PlayStation 3** methods are open as well: same numbering, same stored
     method 0, and method 1 there is not this method 1 — tried against Star
-    Ocean 5's blocks it decodes none.
-
-    A second front opened in session 16. **Eternal Sonata's methods 2 and 3**
-    are 961 of its 1 105 shipped files, they resist the same 448-candidate
-    search, and its executable is a cleanly decrypted 5.7 MB PowerPC image
-    rather than an encrypted PlayStation one — which makes it the easiest place
-    in this whole family to look at a second compressor with a debugger's eye.
-    Whether that method 2 and tri-Ace's are the same thing is unknown and worth
-    knowing: both are the second slot in the same numbering, and neither is
-    byte-flag framed.
+    Ocean 5's blocks it decodes none. Whether any of these method 2s are the
+    same thing as any other is unknown and worth knowing.
 
 23. **Resonance of Fate's container.** The executable proves the engine and its
     audio containers are on the disc, but its scenes, models and animations are

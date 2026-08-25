@@ -127,11 +127,12 @@ and a consistent 16-byte header on the other seven.
 
 Running tri-Ace's method 1 against them produces the right *header* and the
 wrong *length*, which is the signature of a shared framing and a different
-match encoding. So the same search session 14 used was run again, over 14 ways
-of splitting the two bytes into a distance and a length, four biases, both bit
-orders, both polarities — with the oracle that the output must land on exactly
-the size the table of contents states **and** consume the input to its last
-byte, on every file at once.
+match encoding. So the same search session 14 used was run again, over twelve ways
+of splitting the two bytes into a distance and a length, four length biases,
+both bit orders, both polarities, and a sliding window against a ring buffer at
+three start positions — 768 candidates, with the oracle that the output must
+land on exactly the size the table of contents states **and** consume the input
+to its last byte, on every file at once.
 
 One candidate does it, and it is one bit-field away from tri-Ace's:
 
@@ -193,8 +194,9 @@ the first token is a back-reference, which cannot exist at output position
 zero. **Method 3 does not use that framing.** Only 33 of 948 method-3 files
 begin with `0xFF` at all, and none of the four bytes behind those is a magic.
 
-The 448-combination search was run anyway, against five method-3 `.e` files and
-one method-2 one, with 16 bytes of known plaintext each — word 0 is `0x181` and
+A wider search was run anyway — 14 byte splits, four length biases, both bit
+orders, both polarities and four header skips, 896 candidates — against five
+method-3 `.e` files and one method-2 one, with 16 bytes of known plaintext each — word 0 is `0x181` and
 word 3 is the size the table of contents states. **Nothing reproduces it.**
 
 Method 2 gets the same treatment and the same answer: all 13 of its files begin

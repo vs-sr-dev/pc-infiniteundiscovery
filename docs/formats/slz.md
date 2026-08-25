@@ -368,9 +368,10 @@ different.** `unpack_lz77(src, want, swap_nibbles=True)` in `slz.py` reads it.
 
 The oracle is the same one that fixed tri-Ace's fields: the output must land on
 exactly the size the index states **and** consume the input to its last byte,
-on every file at once. Fourteen ways of splitting the two bytes, four length
-biases, both bit orders and both flag polarities were tried — 448 candidates.
-One passes:
+on every file at once. Twelve ways of splitting the two bytes into a distance
+and a length, four length biases, both bit orders, both flag polarities, and a
+sliding window against a ring buffer at three start positions were tried — 768
+candidates. One passes:
 
 | | |
 | --- | --- |

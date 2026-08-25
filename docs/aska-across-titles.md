@@ -882,7 +882,7 @@ of the second byte of a back-reference, and changing nothing else. Same flag
 byte, same bit direction, same polarity, same two-byte reference, same 12/4
 split, same bias of three, same 4 095-byte window.
 [slz.md §2d](formats/slz.md#2d-the-tri-crescendo-variant) has the full
-comparison and the 448-candidate search that found it. **8 of 8 files land on
+comparison and the 768-candidate search that found it. **8 of 8 files land on
 exactly the size the index states and consume the input to its last byte.**
 
 **The method byte.** `index.vmtoc` is 1 105 records of 48 bytes — a path, an
