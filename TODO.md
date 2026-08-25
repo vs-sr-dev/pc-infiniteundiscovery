@@ -5,6 +5,8 @@ session's log carries its own "Left open" list; this file is the consolidated
 view, kept current at the end of every session.
 
 Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
+The numbered questions are all about this one disc; the section at the end,
+[Beyond this game](#beyond-this-game--is-aska-in-other-titles), is not.
 
 **Start here next time: question 1.** After session 12 a scene is readable as
 *structure* from every side — geometry, materials, textures, skeleton,
@@ -12,6 +14,11 @@ animation, collision, the script that drives it and the navigation mesh the AI
 walks on — and every skinned object indexes its own file's node tree, so there
 is no shared skeleton to find. What is thin is *meaning*: 246 of the 253
 scene-script opcodes are known only by number.
+
+There is now a second front as well, which does not compete with question 1 for
+the same kind of work: testing whether the engine turns up in tri-Ace's other
+titles. It is waiting on material rather than on ideas, and the tooling for the
+first rung of it is already written.
 
 ## Now the main line of work
 
@@ -124,6 +131,73 @@ stored vertices are not in.
     material's texture, the plain reading gives a median texel anisotropy of
     1.89 against 5.03 rotated, over 251 914 triangles. Only an actual render
     would close it.
+
+## Beyond this game — is ASKA in other titles?
+
+Everything above is about one disc. This is the one open question that is not:
+**does the ASKA engine appear in tri-Ace's other titles, and does enough of it
+survive to be readable with the tools here?**
+
+It is worth doing for two reasons. It would be the first result in this
+repository useful to someone who is not working on *this* game. And if a later
+title carries the same formats with the version digits bumped, the **difference
+between two revisions** is often what explains the fields a single revision
+leaves opaque — several of the questions above are the kind that a second
+specimen would answer for free.
+
+### The specimens
+
+| Title | Year | Platform | Why |
+| --- | --- | --- | --- |
+| Star Ocean: The Last Hope | 2009 | Xbox 360 | One year on, same platform |
+| Resonance of Fate | 2010 | Xbox 360 | Two years on, same platform |
+| Star Ocean: Integrity and Faithlessness | 2016 | PS3 (JP) | Eight years on, still big-endian |
+
+Three points on the Xbox 360 hold the **platform constant and vary the year**,
+which isolates version drift. The PS3 build of Star Ocean 5 is chosen over the
+PS4 one deliberately: PowerPC is big-endian like the Xbox 360, so its formats
+would be comparable byte for byte and the readers here would need no changes.
+On PS4 everything is byte-swapped and a difference could not be told apart from
+a change of byte order.
+
+Disc 1 alone is enough for a three-disc release: the executable is on it, and
+so is a full slice of every resource type.
+
+### The ladder, cheapest first
+
+1. **`python tools/aska.py identify <image>`** — sweeps any file for eighteen
+   ASKA signatures in one pass. Built in session 12; see its docstring for what
+   it looks for and why those particular things.
+2. **`tools/xdvdfs.py list`** to find the containers, then `tools/mron.py scan`
+   at their offsets.
+3. **`tools/xex.py extract`** then `tools/rtti.py` on the executable. `Aska::`
+   in the RTTI settles it outright.
+4. **The one that is worth more than a `grep`: make the readers parse it.**
+   Every tool here has hard self-checks — a chunk walk that must land exactly
+   on the end, stated counts that must match, opcodes that must have one arity.
+   "The ASF of that game parses and passes its checks" is an order of magnitude
+   stronger than "the magic matches".
+
+### Two things to know before starting
+
+**The tests are asymmetric.** A hit on a versioned magic or on the engine
+namespace is conclusive — a byte-reversed FourCC with an ASCII version stapled
+on is not something another studio arrives at by coincidence. **A miss proves
+very little:** a studio can change its container and keep its scene format, and
+the platform layer — texture tiling, audio codec, compression — is expected to
+differ on anything that is not an Xbox 360.
+
+**Two known gaps in the tooling**, neither large:
+
+* `tools/xex.py` implements the XEX "basic" compression scheme, not "normal"
+  (LZX). Infinite Undiscovery used basic. A title that used LZX would need
+  `tools/lzx.py`, already written for XCompress, wired in — an hour, not a
+  session.
+* `tools/rtti.py` reads MSVC RTTI. A PlayStation build is Clang or GCC, whose
+  Itanium-ABI names are length-prefixed (`Aska` appears as `4Aska`).
+  `aska.py` already looks for both manglings, so the *conclusive test* works;
+  recovering a full class inventory the way session 1 did would need a
+  different demangler.
 
 ## Verified, needs no further work
 
