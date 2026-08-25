@@ -31,9 +31,23 @@ Session 15 took the same codec back to tri-Ace's first two 32-bit games and it
 worked unchanged: **`SLZ` is from 1998, not 2003**, and on those two discs it
 wraps MIPS overlays and Sony `TIM` textures rather than any format of the
 studio's own. So the wrapper is older than everything it later carries. It also
-found that **`SLE` is not there in 1998 or 1999**, which is question 28. The
-best remaining lead on this front is question 22's second half: **method 2**,
-which is on every PlayStation and PlayStation 2 disc from 1998 on and has never
+found that **`SLE` is not there in 1998 or 1999**, which is question 28.
+
+Session 16 asked the last question of a different kind: **Eternal Sonata**, by
+tri-Crescendo — the studio founded by people who left tri-Ace — on the same
+console and in the same years as this game. It carries no engine, no container
+and no payload format, and it carries **the codec, one swapped nibble apart,
+and the method byte beside it**. So the oldest layer travelled with the people
+and nothing above it did.
+
+It also found a bug in `aska.py`: the verdict rule counted signatures with no
+structural test at their raw hit count, so one chance match on a seven-gigabyte
+image printed "probably ASKA". It now compares them against chance. Two printed
+verdicts changed and no measurement did.
+
+The best remaining lead across all of it is question 22's second half:
+**method 2**, which is on every PlayStation and PlayStation 2 disc from 1998
+on, resists the same search in tri-Crescendo's build too, and has never
 opened.
 
 ## Now the main line of work
@@ -169,7 +183,9 @@ stored vertices are not in.
 
 **Twelve titles were tested and nine of them are the same engine**, with the
 argument and every measurement in
-[docs/aska-across-titles.md](docs/aska-across-titles.md):
+[docs/aska-across-titles.md](docs/aska-across-titles.md). A thirteenth,
+*Eternal Sonata*, is not a tri-Ace title at all and was measured to ask a
+different question — see the row at the end of the table:
 
 | | |
 | --- | --- |
@@ -183,6 +199,7 @@ argument and every measurement in
 | Resonance of Fate, X360 2010 | `SLZ`/`SLE` and AIF headers in the executable, 182 sound `AAC ` containers on the disc |
 | Star Ocean 5, PS3 2016 | `SLZ` blocks whose walk closes exactly, inside CRI `CPK` archives |
 | Star Ocean: Anamnesis, Android 2016 | 46 507 mangled `Aska` symbols, and an asset called `aska0000.bin` |
+| *Eternal Sonata*, X360 2007, **tri-Crescendo** | not the engine — but the method-1 codec one nibble apart, the method byte, and the magic style |
 | Beyond the Labyrinth, 3DS 2012 | **no** — nothing above chance, Nintendo's asset formats, no engine name |
 | Phantasy Star Nova, Vita 2014 | unanswerable — the naming convention matches, the payloads are behind a second encryption layer |
 
@@ -226,6 +243,15 @@ The questions that came out of it, none of which is about this disc:
     method 0, and method 1 there is not this method 1 — tried against Star
     Ocean 5's blocks it decodes none.
 
+    A second front opened in session 16. **Eternal Sonata's methods 2 and 3**
+    are 961 of its 1 105 shipped files, they resist the same 448-candidate
+    search, and its executable is a cleanly decrypted 5.7 MB PowerPC image
+    rather than an encrypted PlayStation one — which makes it the easiest place
+    in this whole family to look at a second compressor with a debugger's eye.
+    Whether that method 2 and tri-Ace's are the same thing is unknown and worth
+    knowing: both are the second slot in the same numbering, and neither is
+    byte-flag framed.
+
 23. **Resonance of Fate's container.** The executable proves the engine and its
     audio containers are on the disc, but its scenes, models and animations are
     invisible: every other signature scores zero sound and both containers are
@@ -266,7 +292,13 @@ The questions that came out of it, none of which is about this disc:
     *is* has never been established either; it has only ever been seen as a
     string beside `SLZ`.
 
-29. **The offset-table archive inside the PlayStation blocks.** A run of `u32`
+29. **Eternal Sonata's payload formats.** `.bop`, `.x3tex`, `.e` and the
+    `.bmd` family, all headerless, all behind methods 2 and 3 except one. Only
+    `BMD ` has shown a magic. Related: what the `BOOK` block inside `CSF ` is —
+    the word is what ADPCM coefficient tables are called on several consoles,
+    and 60 stored files carry it.
+
+30. **The offset-table archive inside the PlayStation blocks.** A run of `u32`
     offsets whose first entry is the size of the table itself — the same
     self-check `PACK` passes eleven years later. It was seen and not measured.
 

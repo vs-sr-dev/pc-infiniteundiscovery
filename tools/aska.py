@@ -276,6 +276,18 @@ class Hit(object):
         return self.good_where if self.checked else self.where
 
 
+def above_chance(size):
+    """How many hits a signature with no structural test needs to mean anything.
+
+    A specific four-byte sequence appears by chance about once per 2**32 bytes,
+    so the expected count on an image is `size / 2**32`. Eight times that, and
+    never fewer than four, is the bar used here: it passes every real row in
+    [docs/aska-across-titles.md](../docs/aska-across-titles.md) and rejects
+    every row that document already calls chance.
+    """
+    return max(4, 8.0 * size / float(1 << 32))
+
+
 def sweep(path, keep=4, progress=None):
     """One pass over the file, collecting every signature at once."""
     pattern = re.compile(b"|".join(b"(" + p + b")" for _, p, _ in SIGNATURES))
@@ -366,12 +378,26 @@ def cmd_identify(args):
     print("  \"sound\" counts the matches whose following field has a plausible")
     print("  shape. Where a signature has such a test, only sound matches are")
     print("  counted towards the verdict -- a bare four-byte magic turns up by")
-    print("  chance about once per four gigabytes.")
+    print("  chance about once per four gigabytes. Where there is no such test,")
+    print("  a signature needs %d hits on a file this size to count at all."
+          % int(above_chance(size)))
 
     print()
     found = {}
     for hit in hits:
-        if hit.sound if hit.checked else hit.count:
+        if hit.checked:
+            # A signature with a structural test is judged on that test alone.
+            strong = hit.sound > 0
+        else:
+            # One without a test is judged against chance. A four-byte magic
+            # turns up about once per 4 GiB, so on a disc image a count of one
+            # or three means nothing -- and before session 16 it was enough to
+            # make this tool answer "probably ASKA". Eternal Sonata is the
+            # worked example: every tested signature scored zero sound and
+            # three untested ones scored 1, 1 and 3 on 7.3 GiB, and the verdict
+            # came out positive on noise.
+            strong = hit.count >= above_chance(size)
+        if strong:
             found[hit.kind] = True
     if found.get("versioned") or found.get("namespace"):
         print("  VERDICT: ASKA. A byte-reversed FourCC with an ASCII version, or")

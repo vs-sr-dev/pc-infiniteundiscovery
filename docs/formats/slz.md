@@ -14,6 +14,11 @@ studio's file formats rather than accompanying them. See
 and [§2b](#2b-the-playstation-codec-method-1) specifies it. It is unchanged
 from 1998 to 2006. Methods 2 and 3 are not decoded.
 
+**And it left the studio.** Eternal Sonata, by tri-Crescendo on the Xbox 360 in
+2007, compresses every file it ships with the same algorithm, the same framing
+and the same method numbering, differing by **one swapped nibble** —
+[§2d](#2d-the-tri-crescendo-variant).
+
 Most of Infinite Undiscovery's bulk is compressed. Every `MESH`, `MTEX`,
 `SCE-`, `SKAC` and `APAC` resource sits behind a header whose first three bytes
 are `SLZ` — 1 812 blocks in disc 1's `ud1.bin` alone, holding 1.88 GB of
@@ -333,6 +338,93 @@ earlier. **`PACK`** was recorded as new in Star Ocean 4 in 2009; it is the
 leading literal of roughly 190 of the 1 987 blocks on the 2003 disc that do
 not yet decode. Its header cannot be checked until methods 2 and 3 open, so that is
 a tag six years early and not yet a container six years early.
+
+## 2d. The tri-Crescendo variant
+
+*Eternal Sonata* (Xbox 360, 2007) is not a tri-Ace game. It is tri-Crescendo,
+the studio founded by people who left tri-Ace, and it has no `SLZ` block, no
+`Aska`, no engine namespace and no container — every asset is an ordinary file
+in an ordinary directory tree, indexed by a table called `index.vmtoc`.
+
+What it does have is this codec.
+
+### The differences, in full
+
+| | tri-Ace, 1998–2006 | tri-Crescendo, 2007 |
+| --- | --- | --- |
+| framing | flag byte, 8 tokens, bit 0 first, literal on 1 | **identical** |
+| back-reference | two bytes, `a` then `b` | **identical** |
+| distance | <code>a &#124; ((b & 0x0F) << 8)</code> | <code>a &#124; ((b >> 4) << 8)</code> |
+| length | `(b >> 4) + 3` | `(b & 0x0F) + 3` |
+| distance range | 1 – 4 095 | **identical** |
+| length range | 3 – 18 | **identical** |
+| where the stream lives | inside an `SLZ` block | the whole file, from byte 0 |
+| where the sizes live | the `SLZ` header | `index.vmtoc`, one 48-byte record per file |
+
+**The two nibbles of the second byte are swapped, and nothing else is
+different.** `unpack_lz77(src, want, swap_nibbles=True)` in `slz.py` reads it.
+
+### The measurement
+
+The oracle is the same one that fixed tri-Ace's fields: the output must land on
+exactly the size the index states **and** consume the input to its last byte,
+on every file at once. Fourteen ways of splitting the two bytes, four length
+biases, both bit orders and both flag polarities were tried — 448 candidates.
+One passes:
+
+| | |
+| --- | --- |
+| method-1 files decoding to exactly the stated size | **8 of 8** |
+| input consumed to the final byte | **8 of 8** |
+| decompressed files that restate their own size at `+0x0C` | 7 of 8 |
+
+The eighth carries a magic instead: `op.bmd` comes out as `BMD ` with `0x1DCF`
+= 7 631 at `+0x04`, exactly its own length.
+
+### And the method byte came with it
+
+`index.vmtoc` holds, per file, the uncompressed size, a Unix timestamp and a
+**method byte** taking the values 0, 1, 2 and 3 — where **0 means stored, on
+136 of 136 files whose stated size equals their size on disc.** That is `SLZ`'s
+byte at `+0x03`, with the same range and the same meaning, moved from a block
+header into a per-file table.
+
+Methods 2 and 3 do not open, exactly as tri-Ace's do not, and here the negative
+is provable rather than merely reported: `btldata/voice/bos01.csf` is method 3
+and must decompress to `CSF `, so its first output byte is `C`; its first byte
+on disc has bit 0 clear, which under this framing makes the first token a
+back-reference at output position zero. Method 3 is not this family.
+
+### The check that settles it
+
+Output length is a weak test on its own — a wrong length field can still land
+on the right total. This one is not. Five of the seven `.e` files put a **Unix
+timestamp at `+0x04` of their decompressed data**, and it is the same timestamp
+`index.vmtoc` records for that file, **to the second**:
+
+```
+btldata/script/ai/default.e     index 2007-02-15T09:19:15   inside 2007-02-15T09:19:15
+btldata/script/ai/bos03_v1.e    index 2007-02-15T09:19:17   inside 2007-02-15T09:19:17
+btldata/script/ai/bos07_v1.e    index 2007-02-15T09:19:19   inside 2007-02-15T09:19:19
+btldata/script/ai/bos03_v2.e    index 2007-02-15T09:19:22   inside 2007-02-15T09:19:22
+btldata/script/ai/bos07_v2.e    index 2007-02-15T09:19:24   inside 2007-02-15T09:19:24
+```
+
+The other two agree except for a constant offset of **exactly 80 seconds** in
+both, which reads as a later build step stamping the index rather than a decode
+error. A wrong decompression does not produce a 32-bit value that matches an
+independent table to the second, five times.
+
+### What to make of it
+
+Two studios do not independently choose the same flag direction, the same
+polarity, the same two-byte reference, the same 12/4 split and the same bias of
+three, and then differ only in which nibble is which. What is harder to explain
+away than the codec is the **method byte beside it** — 0 to 3, 0 meaning stored
+— which is a design decision rather than a common implementation.
+
+The full argument, and the layers that did *not* travel, are in
+[aska-across-titles.md §13](../aska-across-titles.md#13-eternal-sonata--what-an-offshoot-studio-took-with-it).
 
 ## 3. Frames
 

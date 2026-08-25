@@ -18,6 +18,7 @@ from tri-Ace's second game to their most recent one measured here:
 | Star Ocean: The Second Story | 1998 | PlayStation | `SCUS_944.21`, USA, disc 1 |
 | Valkyrie Profile | 1999 | PlayStation | `SLUS_011.56`, USA, disc 1 |
 | Star Ocean: Blue Sphere | 2001 | Game Boy Color | `STAROCEANGBBO2J`, Japan |
+| *Eternal Sonata* † | 2007 | Xbox 360 | `P1_EU.pe`, PAL — **tri-Crescendo, not tri-Ace** |
 | Star Ocean: Till the End of Time | 2003 | PlayStation 2 | `SLES_820.28`, PAL, disc 1 |
 | Radiata Stories | 2005 | PlayStation 2 | `SLUS_212.62`, USA |
 | Valkyrie Profile 2: Silmeria | 2006 | PlayStation 2 | `SLES_546.47`, PAL |
@@ -29,12 +30,22 @@ from tri-Ace's second game to their most recent one measured here:
 | Beyond the Labyrinth | 2012 | Nintendo 3DS | `CTR-P-ALVJ`, Japan |
 | Phantasy Star Nova | 2014 | PlayStation Vita | `PCSG00351`, Japan, SEGA-published |
 
+† Eternal Sonata is not one of the twelve. It is a different studio and a
+different question — see [§13](#13-eternal-sonata--what-an-offshoot-studio-took-with-it).
+
 **The answer is yes for nine of the twelve, no for two, and unanswerable for
 one.** What differs between the nine is not whether it is the same engine but
 how much of it is *readable*, and that turns out to be a different question
 with a different answer every time. The oldest two are a special case worth
 naming up front: they carry the wrapper and **nothing** it later wraps, which
 is what dates the parts relative to each other.
+
+A thirteenth specimen is in here that does not belong to that count at all.
+*Eternal Sonata* is a **tri-Crescendo** game — the studio founded by people who
+left tri-Ace — and it was measured to ask a different question: not whether it
+is ASKA, but which layer the people took with them.
+[§13](#13-eternal-sonata--what-an-offshoot-studio-took-with-it) has the answer,
+and it is the oldest layer and only that.
 
 ## 1. The short version
 
@@ -56,6 +67,7 @@ means the tools in this repository actually parsed the title's own data.
 | Phantasy Star Nova, Vita 2014 | not reachable | `disc1/fNNNNN.bin`, CRI `CPK` | no, second layer | the naming, and only that |
 | Star Ocean 5, PS3 2016 | not reachable | `SLZ`, ASF/AAF/ACF/AIF magics, `AHSL` | no, envelope changed | `SLZ` walking exactly |
 | Star Ocean: Anamnesis, Android 2016 | **46 507 mangled `Aska`** | `aska0000.bin`, `AHSL`, reversed AIF | one texture header | the namespace, overwhelmingly |
+| *Eternal Sonata*, X360 2007 — tri-Crescendo | no, and no RTTI | **the method-1 codec, one nibble apart; the method byte; the magic style** | `slz.py`, method 1 | 8 of 8 files decoding exactly |
 
 Three threads run the whole length of it:
 
@@ -66,7 +78,9 @@ Three threads run the whole length of it:
   identical across all of them. See
   [§11](#11-the-five-playstation-discs-1998-to-2006).
   **`SLE`, which always travels beside it from 2003 on, is not there in 1998 or
-  1999**, so the pair has two birthdays.
+  1999**, so the pair has two birthdays. And the codec **outlived the studio**:
+  tri-Crescendo's 2007 Xbox 360 title uses it with one nibble swapped
+  ([§13](#13-eternal-sonata--what-an-offshoot-studio-took-with-it)).
 * **`AHSL`**, the shader toolchain, is in both Xbox 360 executables, in 30
   shipped files on the PlayStation 3 and 147 times in the Android library.
 * **The art naming** — `cNNN_NN_partM`, `pCol` primitives, Maya light names —
@@ -405,7 +419,11 @@ spending a session on it.
 ## 7. What this changes about the tooling
 
 Two gaps were named in the TODO before this started, and both turned out to be
-worth closing or correcting.
+worth closing or correcting. A third was found later, in session 16, and it was
+a bug rather than a gap: **the verdict rule counted untested signatures at
+their raw hit count**, so one chance match on a seven-gigabyte image was enough
+to print "probably ASKA". It now compares them against what chance produces —
+see [§13](#13-eternal-sonata--what-an-offshoot-studio-took-with-it).
 
 **XEX "normal" compression is implemented.** Both Xbox 360 titles use LZX where
 Infinite Undiscovery used the basic scheme, so neither executable could be
@@ -486,7 +504,10 @@ it is the first title tested where the answer is not yes.
 **The sweep finds nothing.** Over the whole 0.70 GiB image every count is at or
 below what chance produces on that much data, and every signature with a
 structural test scores **zero sound** — in both byte orders, the reversed
-magics included. Under the `P@CK` entries are blocks tagged `mpak`, which are
+magics included. Until session 16 the tool's own verdict line disagreed with
+that sentence, for the reason given in
+[§13](#13-eternal-sonata--what-an-offshoot-studio-took-with-it); the numbers
+were always right and the summary was not. Under the `P@CK` entries are blocks tagged `mpak`, which are
 not `SLZ`.
 
 **Its assets are Nintendo's formats.** Of the first 400 files in the RomFS,
@@ -788,3 +809,130 @@ The one deliberate convention the ROM does show is that every non-empty bank
 begins with its own bank number — 242 of 255, the thirteen exceptions being
 entirely zero-filled. That is common Game Boy practice rather than a tri-Ace
 habit, and it is offered as an observation and not as evidence.
+
+## 13. Eternal Sonata — what an offshoot studio took with it
+
+Every other specimen here is a tri-Ace title and the question is always the
+same one. This one is not, and the question is different.
+
+*Eternal Sonata* (Xbox 360, 2007) was made by **tri-Crescendo**, founded by
+people who left tri-Ace and best known there as its sound team, and developed
+in-house with no co-developer. It sits between Infinite Undiscovery and Star
+Ocean 4 in time, on the same console, at the same scale. So the useful question
+is not "is this ASKA" — it plainly is not — but **which layer the people
+carried with them**, given that sessions 14 and 15 dated the layers separately:
+the compression to 1998, the payload formats to somewhere between 1999 and
+2003, the container later still.
+
+**The answer is the oldest layer, and only that.**
+
+### What is not there
+
+`xex.py` reads the executable with no changes — the compression is `basic`, as
+Infinite Undiscovery's is rather than Star Ocean 4's — and the decrypted image
+contains none of it:
+
+| Searched for | Hits |
+| --- | ---: |
+| `Aska`, `ASKA`, `aska`, `AHSL` | 0 |
+| `SLZ` | 0 |
+| `R:M:`, `pCol`, `Tri_ace` | 0 |
+| `ASF `, `AIF `, `AAF `, `ACF `, `AAC `, `MRON`, `PACK` | 0 |
+| `.?AV` — MSVC RTTI | 0 |
+| `tri-Crescendo` | **5** |
+
+The single `SLE` hit is `SLEP`, in a table of four-character task names beside
+`TextMgr Task` and `ACTV`. Checked, and false.
+
+The disc is different in shape too. Infinite Undiscovery ships two monolithic
+containers; Star Ocean 4 ships the same idea with `PACK` inside it; Eternal
+Sonata ships **an ordinary directory tree of 1 108 named files** — `.bop`,
+`.bmd`, `.x3tex`, `.csf`, `.cxs`, `.e` — with no container anywhere. And its
+executable links **libpng, zlib and libjpeg**, which tri-Ace's does not: this
+is a studio that used the libraries everybody uses.
+
+### The sweep, and the tool bug it exposed
+
+`aska.py identify` over the whole 7.30 GiB finds **nothing sound**. Every
+signature with a structural test scores zero; the three without one score 1, 1
+and 3, against the ~1.8 that chance produces on that much data. Which is
+exactly what the entropy census predicts — 86 % of the disc is method 3 at
+entropy 7.997, and a signature sweep cannot see through it.
+
+The tool did not say that, though. It printed **"probably ASKA, on payload
+magics alone"**, because the verdict rule counted any signature with no
+structural test at its raw hit count, and one `ACF ` hit on 7.3 GiB was enough.
+That is the mirror image of the Resonance of Fate mistake session 13 recorded:
+there a real finding was dismissed as noise, here noise was reported as a
+finding.
+
+`aska.py` now judges an untested signature against chance — `max(4, 8 × size ÷
+2³²)` hits — and prints the bar it used. Replayed against every specimen
+already measured, the fix changes two printed verdicts and no measurement:
+Eternal Sonata and **Beyond the Labyrinth** both drop to "nothing found", which
+is what [§9](#9-beyond-the-labyrinth--the-first-specimen-that-says-no) and this
+section have been claiming in prose all along. All nine positive titles stay
+positive.
+
+### What is there
+
+**The codec.** Every shipped file is compressed, and the eight files the index
+marks method 1 decode with tri-Ace's method 1 — after swapping the two nibbles
+of the second byte of a back-reference, and changing nothing else. Same flag
+byte, same bit direction, same polarity, same two-byte reference, same 12/4
+split, same bias of three, same 4 095-byte window.
+[slz.md §2d](formats/slz.md#2d-the-tri-crescendo-variant) has the full
+comparison and the 448-candidate search that found it. **8 of 8 files land on
+exactly the size the index states and consume the input to its last byte.**
+
+**The method byte.** `index.vmtoc` is 1 105 records of 48 bytes — a path, an
+uncompressed size, a Unix timestamp, and a **method** taking 0, 1, 2 or 3,
+where 0 means stored on **136 of 136** files. That is `SLZ`'s byte at `+0x03`,
+same range and same meaning, moved out of a block header into a per-file table.
+
+**The magic style, and the chunk convention behind it.** The 136 stored files
+show their headers with nothing in the way: `CSF ` 60 times, `CXS ` 62, `RIFF`
+14, plus `BMD ` out of the one method-1 file that carries one. **All 60 `CSF `
+state their own file length at `+0x04`**, counted from byte zero rather than
+from the header's end, and all 60 carry `BOOK` at `+0x10` and `SONG` at
+`+0x20` — a four-character tag followed by its own size, which is the shape of
+`ASF `'s chunk tree with different tags. `aska.py`'s own length validator would
+accept every one of them.
+
+Even the standard format is written to the house convention rather than the
+standard's: the fourteen `RIFF` files put their size **big-endian** and set it
+to the whole file length instead of `length − 8`, and their `fmt ` fields are
+big-endian too.
+
+**And the same wall.** Methods 2 and 3 do not open, exactly as tri-Ace's do
+not, and here the negative can be proved: a method-3 file whose stored siblings
+are all `CSF ` must decompress to a `C`, and its first byte on disc has bit 0
+clear, which under this framing puts a back-reference at output position zero.
+Two studios, five years apart, with a second and third compressor that resist
+the same search.
+
+### The reading, and what would overturn it
+
+Three layers, three answers:
+
+| Layer | Born | In Eternal Sonata? |
+| --- | --- | --- |
+| the compression algorithm and its method byte | 1998 | **yes**, one nibble apart |
+| the four-character space-padded magic convention | by 2003 | **yes**, different letters |
+| the payload formats — `S?F`, `A?F` | 1999–2003 | no |
+| the container — `MRON`, `PACK` | 2005–2009 | no; there is no container |
+| the engine namespace and shader toolchain | — | no |
+
+The ordinary explanation fits: **people carried the oldest and most portable
+piece of code they had, and the habits that go with it, and built everything
+above it new.** A compression routine travels in a head or a personal library;
+a renderer does not. That the difference is a *swap* rather than a copy is
+itself informative — it reads like a reimplementation from memory or from a
+description rather than a lifted file.
+
+What would overturn it: a third studio, unconnected to either, shipping the
+same byte-flag LZ77 with a 12/4 split and a bias of three. That scheme is not
+exotic and this document should not pretend otherwise. What is hard to explain
+away is the **method byte sitting beside it** — 0 to 3 with 0 meaning stored —
+because that is a design decision rather than a common implementation, and it
+is in both.

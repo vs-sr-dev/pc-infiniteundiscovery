@@ -273,8 +273,16 @@ PS_STORED = 0
 PS_LZ77 = 1
 
 
-def unpack_ps_lz77(src, want):
-    """Method 1: LZ77 with byte-wide flags. Returns (output, bytes consumed)."""
+def unpack_lz77(src, want, swap_nibbles=False):
+    """Method 1: LZ77 with byte-wide flags. Returns (output, bytes consumed).
+
+    `swap_nibbles` selects the **tri-Crescendo** variant. Eternal Sonata
+    (Xbox 360, 2007) compresses every shipped file with the same algorithm,
+    the same framing and the same bias of three, and swaps the two nibbles of
+    the second byte of a back-reference: the length is the low nibble and the
+    top of the distance is the high one. Nothing else differs. See
+    [docs/formats/slz.md](../docs/formats/slz.md#2d-the-tri-crescendo-variant).
+    """
     out = bytearray()
     i = 0
     n = len(src)
@@ -300,13 +308,22 @@ def unpack_ps_lz77(src, want):
                 break
             a, b = src[i], src[i + 1]
             i += 2
-            dist = a | ((b & 0x0F) << 8)
-            length = (b >> 4) + 3
+            if swap_nibbles:
+                dist = a | ((b >> 4) << 8)
+                length = (b & 0x0F) + 3
+            else:
+                dist = a | ((b & 0x0F) << 8)
+                length = (b >> 4) + 3
             start = len(out) - dist
             for k in range(length):
                 at = start + k
                 out.append(out[at] if 0 <= at < len(out) else 0)
     return bytes(out), i
+
+
+def unpack_ps_lz77(src, want):
+    """tri-Ace's method 1, as shipped from 1998 to 2006."""
+    return unpack_lz77(src, want, swap_nibbles=False)
 
 
 class PsSlzBlock:

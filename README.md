@@ -147,7 +147,10 @@ Container offsets for the European release are tabulated in
   `SLZ` runs through all of it from **1998** to 2016 and one of its codecs
   decodes unmodified across eight of those years — and on the two oldest discs
   it wraps nothing of tri-Ace's at all, which dates the wrapper as older than
-  the engine's own file formats.
+  the engine's own file formats. A thirteenth specimen asks a different
+  question: *Eternal Sonata*, by the offshoot studio **tri-Crescendo**, carries
+  no engine and no container but does carry that same codec with one nibble
+  swapped, and the method byte beside it.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
@@ -161,7 +164,9 @@ Container offsets for the European release are tabulated in
   in 2016, in three header revisions — the first of which holds still for five
   discs and eight years. The PlayStation revision wraps tri-Ace's own LZ77
   rather than an SDK library, and that codec is specified here: 1 762 of 1 762
-  sampled blocks from 1998, 1999, 2003 and 2006 decode with no failures.
+  sampled blocks from 1998, 1999, 2003 and 2006 decode with no failures — as do
+  all eight method-1 files in a 2007 title by a different studio, once two
+  nibbles are swapped.
 * [AIF](docs/formats/aif.md) — the Aska Image File: every texture in the game,
   stored in the Xbox 360 GPU's own tiled layout.
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource
