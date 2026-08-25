@@ -1,5 +1,12 @@
 # SLZ — the compressed resource wrapper
 
+**The oldest thing in the engine.** It is on Radiata Stories' PlayStation 2
+disc in 2005, three years before Infinite Undiscovery, and still in Star Ocean
+5 in 2016 — older than the container, older than the payload formats, older
+than the name ASKA is attached to in this repository. See
+[§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
+[aska-across-titles.md](../aska-across-titles.md).
+
 Most of Infinite Undiscovery's bulk is compressed. Every `MESH`, `MTEX`,
 `SCE-`, `SKAC` and `APAC` resource sits behind a header whose first three bytes
 are `SLZ` — 1 812 blocks in disc 1's `ud1.bin` alone, holding 1.88 GB of
@@ -12,7 +19,7 @@ The name is tri-Ace's. The compression is not.
 error, and every payload that states a usable length agrees with the decode.
 See [§6](#6-status) for the exact numbers.
 
-## 1. It is XCompress underneath
+## 1. It is XCompress underneath, on the Xbox 360
 
 The constant `0x0FF512EE` at offset `0x18` is Microsoft **XCompress**'s stream
 magic, and it is byte-identical in all 1 812 blocks along with the version field
@@ -71,18 +78,47 @@ Entries holding an SLZ block are padded, with
 `entry size == align_up(compressed size, 4) + 24` — the 24 being the wrapper
 that sits before the counted region.
 
-## 2a. What a second title changed
+## 2a. Three revisions, and what the oldest one explains
 
-Star Ocean 4's disc carries the same wrapper, and reading it moved two fields
-that this corpus showed as constants.
+The name is the same in every tri-Ace title from 2005 on. The header is not,
+and the differences are small enough to line up in one table.
 
-**The XCompress version.** Star Ocean 4 writes `0x01030000` at `0x1C` where
-Infinite Undiscovery writes `0x01020000`.
+| | PlayStation 2, 2005–06 | Xbox 360, 2008–10 | PlayStation 3, 2016 |
+| --- | --- | --- | --- |
+| `0x00` | `SLZ` | `SLZ` | `SLZ` |
+| `0x03` | **method** — 0 stored, 3 compressed | 4, always | **method** — 0 stored, 1–3 compressed |
+| `0x04` | compressed size | `0x20` | `0x00010025` |
+| `0x08` | uncompressed size | compressed size | compressed size |
+| `0x0C` | zero | uncompressed size | uncompressed size |
+| `0x10` | payload | zero | zero |
+| `0x14` | | one | `0x20` |
+| `0x18` | | XCompress stream | `0x00400001` |
+| `0x20` | | | payload |
+| byte order | little-endian | big-endian | big-endian |
 
-**The chunk size.** Infinite Undiscovery fixes it at `0x20000`, so a large
-payload is several chunks. Star Ocean 4 sets it to the whole uncompressed
-length, so a block is one chunk however large it is. The window stays
-`0x20000` in both.
+Between 2005 and 2008 **one word was inserted at `0x04`**. The size pair and
+the zero behind it move down by four bytes and nothing else changes. Between
+2008 and 2016 the `0x20` moves from `0x04` to `0x14`, where it is genuinely the
+header size, and XCompress goes away — which it had to, being an Xbox library.
+
+**The fourth byte is a method, and the 2005 disc is what proves it.** Reading
+only Infinite Undiscovery it looks like a version: the value is 4 in all 1 812
+blocks. Star Ocean 5 was the first specimen to show it selecting a codec, Star
+Ocean 4's stored blocks agreed, and Radiata Stories settles it — 68 of 661
+sampled blocks say 0, and every one of those 68 has its two sizes equal and its
+payload in the clear. Infinite Undiscovery is the exception.
+
+Two more measurements from that sample of 661, taken from three widely
+separated regions of the disc: the word at `0x0C` is zero in **661 of 661**,
+and the compressed size is less than or equal to the uncompressed in **661 of
+661**.
+
+### What a second Xbox 360 title changed
+
+Star Ocean 4 writes XCompress version `0x01030000` where Infinite Undiscovery
+writes `0x01020000`, and sets the chunk size to the whole uncompressed length
+rather than a fixed `0x20000`, so a block is one chunk however large it is. The
+window stays `0x20000`.
 
 One consequence reached the reader. Infinite Undiscovery's frame walk lands
 exactly on the end of the chunk; Star Ocean 4's leaves a few bytes of zero
@@ -93,12 +129,14 @@ are an error. With that one change, 797 of Star Ocean 4's blocks decompress
 into `AAF`, `ASF`, `ACF`, `AIF` and `-CNS` payloads that their own readers then
 parse.
 
-Star Ocean 4 also has stored blocks — 20 in the first 64 MiB of `soz0.bin`,
-the arrangement [§6a](#6a-some-blocks-are-stored-not-compressed) describes. The
-PlayStation 3 build of Star Ocean 5 makes that arrangement explicit rather than
-implicit: byte `0x03`, a constant 4 here, is a **method** there, and method 0
-means stored. That build moves several other fields as well, and is set out in
-[aska-across-titles.md](../aska-across-titles.md#3-slz-in-2016).
+### The codecs behind the two later revisions are open
+
+XCompress is only the Xbox 360 answer. What the PlayStation 2 and PlayStation 3
+revisions put behind their headers is not decoded: not XCompress, and not plain
+LZSS — 480 combinations of offset width, length width, byte order, minimum
+match, flag polarity and bit order were tried against 60 PlayStation 3 blocks
+and none decoded one. Their stored blocks read fine, which is how the method
+byte was identified in the first place.
 
 ## 3. Frames
 
@@ -222,7 +260,10 @@ payloads by magic: `ASF ` 916, `AAC ` 349, `MRON` 324, `AIF ` 156, `AAF ` 62,
 
 A wrapper whose **compressed size equals its uncompressed size** has no
 XCompress stream behind it at all: the payload is simply that many bytes
-starting at `0x18`. None of disc 1's `ud1.bin` blocks are like that, which is
+starting at `0x18`. On every other title this is what the method byte at
+`0x03` says outright — see
+[§2a](#2a-three-revisions-and-what-the-oldest-one-explains) — and here it has
+to be inferred from the sizes, because this title writes a constant there. None of disc 1's `ud1.bin` blocks are like that, which is
 why session 3 never met one, but seven of the 40 `SCE-` resources in `ud2.bin`
 are — all of them under 200 bytes, where compression would not pay. A decoder
 should check the two sizes before looking for the magic at `0x18`, or it will

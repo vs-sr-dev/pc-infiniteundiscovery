@@ -13,28 +13,48 @@ one that varies the platform while staying big-endian:
 
 | Title | Year | Platform | Build |
 | --- | --- | --- | --- |
+| Radiata Stories | 2005 | PlayStation 2 | `SLUS_212.62`, USA |
+| Valkyrie Profile 2: Silmeria | 2006 | PlayStation 2 | `SLES_546.47`, PAL |
 | Infinite Undiscovery | 2008 | Xbox 360 | the baseline, `UD4` |
 | Star Ocean: The Last Hope | 2009 | Xbox 360 | `SOZ.exe`, 2009-03-31 |
 | Resonance of Fate | 2010 | Xbox 360 | `CH_Release.exe`, 2010-01-27 |
 | Star Ocean: Integrity and Faithlessness | 2016 | PlayStation 3, JP | 2016-03-31, program revision 12072 |
-| Star Ocean: Anamnesis | 2016 | Android | `libSOA.so`, arm64 — added after the other three, see [§8](#8-star-ocean-anamnesis-and-what-it-cost-the-tool) |
+| Star Ocean: Anamnesis | 2016 | Android | `libSOA.so`, arm64 |
+| Beyond the Labyrinth | 2012 | Nintendo 3DS | `CTR-P-ALVJ`, Japan |
+| Phantasy Star Nova | 2014 | PlayStation Vita | `PCSG00351`, Japan, SEGA-published |
 
-**The answer is yes, for all four.** What differs between them is not whether
-it is the same engine but how much of it is *readable*, and that turns out to
-be a different question with a different answer in each case.
+**The answer is yes for six of the eight, no for one, and unanswerable for
+one.** What differs between the six is not whether it is the same engine but
+how much of it is *readable*, and that turns out to be a different question
+with a different answer every time.
 
 ## 1. The short version
 
-| Evidence | SO4 | RoF | SO5 | Anamnesis |
+One row per specimen, oldest first. "Readers open it" is the only column that
+means the tools in this repository actually parsed the title's own data.
+
+| Title | Engine named | Formats shared | Readers open it | Settled by |
 | --- | --- | --- | --- | --- |
-| `Aska::` in the executable | **yes** | no | encrypted | **yes, 46 507 mangled** |
-| Class inventory | RTTI stripped | RTTI stripped | encrypted | **5 960 names** |
-| `AHSL` shader toolchain | yes | yes | yes, as shipped files | yes |
-| Shader constant names shared with IU | 30 | 0 | 8 | — |
-| AIF images embedded in the executable | **6, byte-identical to IU's** | 5 headers, reader-clean | — | — |
-| `SLZ` wrapper | named in the executable | named in the executable | **present in the data, revised** | named |
-| Container opening table shared with IU | **99.5 % of 2 560 words** | no | — | first word only |
-| Payloads the readers open | **all of them** | none found | headers only | byte-reversed |
+| Radiata Stories, PS2 2005 | no | `SLZ` only | no | 26 254 sound `SLZ` blocks |
+| Valkyrie Profile 2, PS2 2006 | no | `SLZ` only | no | 25 431 sound `SLZ` blocks |
+| Infinite Undiscovery, X360 2008 | `Aska::` + 1 740 RTTI names | *the baseline* | *the baseline* | — |
+| Star Ocean 4, X360 2009 | **`Aska::` in `SOZ.exe`** | `SLZ`, `PACK`, ASF, AAF, ACF, AIF, SNC, AAC | **yes, every one** | the namespace, then the readers |
+| Resonance of Fate, X360 2010 | no, RTTI stripped | `SLZ`/`SLE` and AIF headers in the executable | headers only | 182 sound `AAC ` containers |
+| Beyond the Labyrinth, 3DS 2012 | no | `P@CK` and the art naming | no | **nothing — the one specimen that says no** |
+| Phantasy Star Nova, Vita 2014 | not reachable | `disc1/fNNNNN.bin`, CRI `CPK` | no, second layer | the naming, and only that |
+| Star Ocean 5, PS3 2016 | not reachable | `SLZ`, ASF/AAF/ACF/AIF magics, `AHSL` | no, envelope changed | `SLZ` walking exactly |
+| Star Ocean: Anamnesis, Android 2016 | **46 507 mangled `Aska`** | `aska0000.bin`, `AHSL`, reversed AIF | one texture header | the namespace, overwhelmingly |
+
+Three threads run the whole length of it:
+
+* **`SLZ`** is in every title from 2005 to 2016 that this repository could look
+  inside, in three header revisions that differ by one inserted word and one
+  moved constant.
+* **`AHSL`**, the shader toolchain, is in both Xbox 360 executables, in 30
+  shipped files on the PlayStation 3 and 147 times in the Android library.
+* **The art naming** — `cNNN_NN_partM`, `pCol` primitives, Maya light names —
+  is recognisable in every title including the one that shares no format at
+  all.
 
 ## 2. What each specimen gave up
 
@@ -169,66 +189,70 @@ is chance.
 
 ## 5. What the sweep found
 
-`aska.py identify` over each whole image, same tool, same run. Where a
-signature has a structural test, the **sound** column is the one to read: a
-bare four-byte magic turns up by chance about once per four gigabytes, and
-every image here is bigger than that.
+`aska.py identify` over each whole image, one tool, one run, in title order.
+Where a signature has a structural test, the second number is the **sound**
+count, and it is the only one worth reading: a bare four-byte magic turns up by
+chance about once per four gigabytes, and every image here is bigger than that.
 
-| Signature | IU disc 1 | Star Ocean 4 | Resonance of Fate | Star Ocean 5 |
-| --- | ---: | ---: | ---: | ---: |
-| MRON container | **6 873** / 6 261 sound | — | — | — |
-| SNC scene script | 7 | — | — | — |
-| AREA | 94 | — | — | — |
-| MINI | 44 | — | — | — |
-| SIG- signal | 2 909 | — | — | — |
-| ASF scene | 1 454 / 1 450 | 2 / 1 | 1 / 0 | **1 887** / 1 886 |
-| AAF animation | 6 763 | **305** | 2 | **5 553** |
-| ACF collision | 1 314 | **769** | 2 | **683** |
-| AIF image | 3 321 / 3 320 | **85** / 84 | 3 / 0 | **3 947** / 3 740 |
-| AAC audio | 9 080 | **11 681** | 185 | 22 |
-| SLZ wrapper | 8 104 / 8 082 | **26 531** / 26 498 | 21 / **0** | **19 583** / 10 155 |
-| AI node field | 33 / 33 | 1 / 0 | 1 / 0 | 5 / 0 |
-| `R:M:` node prefix | 877 637 | 1 | 1 | 1 |
-| pCol primitives | 10 357 | **747** | — | **163** |
-| `Tri_ace` node | 1 | — | — | — |
-| AHSL | — | — | 4 | 30 |
+| Signature | Radiata 2005 | Valkyrie Profile 2 2006 | Infinite Undiscovery 2008 | Star Ocean 4 2009 | Resonance of Fate 2010 | Star Ocean 5 2016 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| MRON container | — | — | **6 873** / 6 261 | — | — | — |
+| SNC scene script | — | — | 7 | — | — | — |
+| AREA | — | — | 94 | — | — | — |
+| MINI | — | — | 44 | — | — | — |
+| SIG- signal | — | — | 2 909 | — | — | — |
+| ASF scene | — | — | 1 454 / **1 450** | 2 / 1 | 1 / 0 | 1 887 / **1 886** |
+| AAF animation | 8 | 12 | **6 763** | 305 | 2 | **5 553** |
+| ACF collision | — | — | **1 314** | 769 | 2 | 683 |
+| AIF image | — | — | 3 321 / **3 320** | 85 / 84 | 3 / 0 | 3 947 / **3 740** |
+| AAC audio | — | 3 / 0 | 9 080 / **708** | 11 681 / **6 379** | 185 / **182** | 22 / 0 |
+| SLZ wrapper | 26 275 / **26 254** | 25 531 / **25 431** | 8 104 / **8 082** | 26 531 / **26 498** | 21 / 0 | 19 583 / **10 155** |
+| AI node field | — | — | 33 / **33** | 1 / 0 | 1 / 0 | 5 / 0 |
+| `R:M:` node prefix | 100 † | 37 † | **877 637** | 1 | 1 | 1 |
+| pCol primitives | — | — | **10 357** | **747** | — | **163** |
+| `Tri_ace` node | — | — | 1 | — | — | — |
+| AHSL | 1 † | 7 † | — | — | 4 | 30 |
 
-Star Ocean 5's column is the decrypted package run, 11.2 GiB, not a disc image.
-The little-endian rows added to the tool afterwards — see
-[§8](#8-star-ocean-anamnesis-and-what-it-cost-the-tool) — are not in this table;
-on big-endian data they measure nothing but chance.
+Dashes are counts at or below chance. Star Ocean 5's column is its decrypted
+package run, 11.2 GiB, not a disc image. Beyond the Labyrinth and Star Ocean:
+Anamnesis are not in the table: the first scores nothing anywhere
+([§9](#9-beyond-the-labyrinth--the-first-specimen-that-says-no)) and the second
+is 58 MB of APK whose evidence is in its library
+([§8](#8-star-ocean-anamnesis-and-what-it-cost-the-tool)).
 
-Read down the columns and the three specimens are three different situations.
+**† Checked, and false.** Two rows looked tempting on the PlayStation 2 pair
+and are not real. Every one of Radiata's 100 `R:M:` hits sits inside the same
+self-similar run — `R:M:RAM:m:Y:S:YIS:YIYL|IhIyLh` — and Valkyrie Profile 2's
+37 sit inside `R:M:R:M@R3F@W-D3-`; neither is a node name. Their `AHSL` hits
+are the same kind of thing, one of them inside `AHSLHLSS4LSH5HSH9*5A**/9`.
+Neither PlayStation 2 title leaves a Maya name or a toolchain name on its disc.
+
+Read across the row for `SLZ` and the story of the whole table is there. Read
+down the columns and every title is a different situation.
 
 **Infinite Undiscovery** is the baseline: the container announces itself 6 873
-times, and everything else follows from the entry tables.
+times and everything else follows from its entry tables.
 
-**Star Ocean 4 kept the payloads and threw away the container.** Not one
-`MRON`, `AERA`, `INIM`, `-GIS` or `-CNS` tag on the whole disc — the versioned
-tags that were called conclusive are simply gone. What is there instead is
-**26 498 sound SLZ blocks**, three times Infinite Undiscovery's count, and
-uncompressed runs of `ACF` and `AAF` and `AAC` sitting in the open. The 747
-`pCol` hits track the 769 `ACF` ones, which is what a stored collision file
-looks like: the Maya primitive names are in the payload, and the payload is not
-compressed.
-
-The `R:M:` count is the clearest single statement of the difference. Infinite
-Undiscovery leaves 877 637 node names in the clear; Star Ocean 4 leaves one.
+**Star Ocean 4 kept the payloads and threw away the container** — not one
+`MRON`, `AERA`, `INIM`, `-GIS` or `-CNS` tag on the whole disc, and 26 498
+sound `SLZ` blocks instead, with runs of `ACF`, `AAF` and `AAC` in the open.
+The 747 `pCol` hits track the 769 `ACF` ones, which is what an uncompressed
+collision file looks like. The clearest single number is `R:M:`: Infinite
+Undiscovery leaves 877 637 node names in the clear and Star Ocean 4 leaves one.
 The models are still there — [§6](#6-the-readers-against-star-ocean-4) opens
-them — they are simply all behind `SLZ` now.
+them — they are simply all behind `SLZ` now. What indexes them is `PACK`.
 
-**Resonance of Fate shows nothing at all.** Every count is at or below what
-chance produces on 7.3 GiB, and every signature with a test scores **zero**
-sound. Its two containers are entropy 8.00 everywhere sampled. Whatever wraps
-that disc, it is not a format any of these readers can see, and the evidence
-for the title rests entirely on its executable.
+**Resonance of Fate** is the quietest disc and not a silent one. Every
+signature with a test scores zero sound except one: **182 sound `AAC `
+containers**, on a disc where chance would produce about two. That row was read
+as noise until it was checked, and checking it is what the `AAC ` validator
+exists for now. Its scenes, models and animations remain invisible.
 
-Two rows are worth a note. `AHSL` scores nothing on any disc, including the
-baseline — the shader toolchain names live in the executable, which is
-compressed inside its XEX, so a sweep of a disc image cannot see them. And
-`Tri_ace` appears once on Infinite Undiscovery and nowhere else: the studio's
-own node name is in its opening logo scene, and the other two titles do not put
-one on the disc in the clear.
+**Star Ocean 5** carries the payload magics in quantity and big-endian, and
+they do not open — see [§2](#2-what-each-specimen-gave-up).
+
+**The PlayStation 2 pair** are `SLZ` and nothing else this repository
+recognises; [§11](#11-the-playstation-2-pair-2005-and-2006) has them.
 
 ## 6. The readers against Star Ocean 4
 
@@ -458,3 +482,114 @@ family, and shares **no payload format at all** with the other four. Whether
 that is a different engine or ASKA rebuilt on a handheld's SDK is not something
 this evidence can decide, and it is worth saying plainly rather than picking
 the flattering reading.
+
+## 10. Phantasy Star Nova — the naming convention, and a locked door
+
+PlayStation Vita, 2014, Japan only. SEGA published it and tri-Ace built it,
+which makes it the only specimen here that is not a tri-Ace title in name.
+
+It ships as a Vita package, and [formats/pkg.md](formats/pkg.md#4a-the-vita-variant)
+covers how that opens: the same container as Star Ocean 5's, a key derived by
+encrypting the package's own RIV, chosen by trying each candidate until the
+item table holds together. Every check passes and all 85 filenames read.
+
+The listing is the evidence:
+
+```
+disc1/f00000.bin                  81 920
+disc1/f00001.bin                 862 208
+disc1/f00002.bin                  32 768
+NOVA_FileList_Vita.cpk         2.83 GB
+NOVA_FileList_Vita_movie.cpk    395 MB
+```
+
+**`disc1/fNNNNN.bin`** is the same convention as Star Ocean: Anamnesis's
+`assets/disc1/f00000.bin` on Android and Beyond the Labyrinth's `f0000.bin` on
+the 3DS — the directory is even called `disc1` on a console that has no discs.
+And the bulk sits in CRI `CPK` archives, as it does on Star Ocean 5.
+
+**Nothing inside can be read**, and the reason is worth stating precisely
+because it is not the usual one. A Vita title has a second encryption layer,
+PFS, under the package layer; its key is sealed by the licence, and the package
+carries the layer's own metadata in `sce_pfs/files.db` and `sce_pfs/unicv.db`.
+The test that separates "wrong key" from "second layer" is a file whose first
+four bytes are known in advance: `sce_sys/pic0.png` does not come out as a PNG
+under any candidate key, while the same key that fails on it reads all 85
+filenames correctly. Getting past that means obtaining the title's licence key,
+which is not reading a format, and this repository stops there.
+
+So Nova is recorded as: **same file-naming convention, same middleware, payloads
+not inspectable.**
+
+## 11. The PlayStation 2 pair, 2005 and 2006
+
+*Radiata Stories* (SLUS-21262, the USA disc) and *Valkyrie Profile 2: Silmeria*
+(SLES-54647, the PAL disc) sit three and two years in front of Infinite
+Undiscovery, on a little-endian MIPS console, and they are the specimens that
+explain a field the later ones made unreadable.
+
+Both discs are built the same way: an ISO 9660 filesystem holding three files —
+the executable, Sony's `IOPRP300.IMG` and `SYSTEM.CNF` — and four gigabytes of
+data in raw sectors outside it, addressed by LBA.
+
+### `SLZ` is theirs already
+
+| | Radiata Stories | Valkyrie Profile 2 |
+| --- | ---: | ---: |
+| `SLZ` magics | 26 275 | 25 531 |
+| of those, sound | **26 254** | **25 431** |
+| everything else | chance | chance |
+
+The name is in the executables too, and in the same shape in both: `SLZ` and
+`SLE` as adjacent eight-byte-aligned constants, twice per binary. The three
+Xbox 360 titles carry the same pair four-byte-aligned and the other way round,
+`SLE` then `SLZ`. Five titles, three CPUs, 2005 to 2010.
+
+### And it explains Infinite Undiscovery's fourth byte
+
+The PlayStation 2 header is shorter than the one
+[slz.md](formats/slz.md) describes, and reading it settles a question that a
+single specimen could not:
+
+| | |
+| --- | --- |
+| `+0x00` | `SLZ` |
+| `+0x03` | **method** — 0 stored, 3 compressed |
+| `+0x04` | compressed size, little-endian |
+| `+0x08` | uncompressed size |
+| `+0x0C` | zero |
+| `+0x10` | payload |
+
+Measured over 661 blocks taken from three widely separated regions of Radiata's
+disc:
+
+| | |
+| --- | --- |
+| zero word at `+0x0C` | **661 of 661** |
+| compressed ≤ uncompressed | **661 of 661** |
+| method 0 with the two sizes equal | **68 of 68** |
+
+Between 2005 and 2008 **one word was inserted at `+0x04`**: the size pair moves
+to `+0x08` and `+0x0C`, the zero moves with it, and everything else stays where
+it was. That is the whole difference.
+
+And the byte at `+0x03` is a **method from the beginning**. Infinite
+Undiscovery writes a constant 4 there and it reads like a version number; Star
+Ocean 5 was the first specimen to show it selecting a codec, and Star Ocean 4's
+stored blocks agreed. The 2005 disc settles it: 68 blocks that say 0 have their
+two sizes equal and their payload in the clear, one of them opening with
+`SEQW`. Infinite Undiscovery is the exception, not the rule.
+
+### What is not there
+
+Neither disc carries a single sound `ASF `, `AIF `, `ACF `, `AAF `, `MRON` or
+`AI node field`. No Maya node names, no `Tri_ace`, no `AHSL` — the hits for
+those are inside repeating runs and are listed as false in
+[§5](#5-what-the-sweep-found). Whatever these two games call their scenes,
+textures and animations, it is not what the 2008 disc calls them, and it is
+behind `SLZ` where a sweep cannot see it.
+
+So the lineage the evidence actually supports is: **the compression wrapper is
+the oldest thing in the engine**, older than the container, older than the
+payload formats, older than the name ASKA is attached to here. Everything else
+in this document is younger than it.

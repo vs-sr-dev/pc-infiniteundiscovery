@@ -151,17 +151,30 @@ def _sane_mron(blob, at):
 
 
 def _sane_slz(blob, at):
-    """Both revisions of the wrapper.
+    """All three revisions of the wrapper.
 
-    Infinite Undiscovery states 0x20 at +0x04 and starts an XCompress stream
-    at +0x18. Star Ocean 5 keeps the compressed and uncompressed sizes exactly
-    where they were, at +0x08 and +0x0C, and states the same 0x20 at +0x14
-    instead -- there it really is the header size, because the payload begins
-    at +0x20. Requiring the size pair to make sense and 0x20 to appear in one
-    of the two places accepts both and still rejects chance matches.
+    The name is the same in every title from 2005 on; the header is not.
+
+    * **PlayStation 2**, Radiata Stories and Valkyrie Profile 2: little-endian,
+      the compressed and uncompressed sizes at +0x04 and +0x08, a zero word at
+      +0x0C, payload at +0x10.
+    * **Xbox 360**, Infinite Undiscovery and Star Ocean 4: big-endian, a word
+      inserted at +0x04 holding 0x20, so the size pair moves to +0x08 and
+      +0x0C; an XCompress stream begins at +0x18.
+    * **PlayStation 3**, Star Ocean 5: the size pair stays at +0x08 and +0x0C
+      and the 0x20 moves to +0x14, where it really is the header size, because
+      the payload begins at +0x20.
+
+    Each revision is tested on its own terms, and the size pair has to make
+    sense in all of them, which is what keeps a chance match out.
     """
     if at + 0x18 > len(blob):
         return None
+    # PS2
+    packed, plain, zero = struct.unpack_from("<3I", blob, at + 4)
+    if 0 < packed <= plain and zero == 0:
+        return True
+    # Xbox 360 and PlayStation 3
     header, packed, plain = struct.unpack_from(">3I", blob, at + 4)
     later = struct.unpack_from(">I", blob, at + 0x14)[0]
     return 0 < packed <= plain and 0x20 in (header, later)

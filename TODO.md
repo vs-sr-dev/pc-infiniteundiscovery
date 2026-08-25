@@ -146,45 +146,49 @@ stored vertices are not in.
 
 ## Beyond this game — answered, and what it left open
 
-**Yes: the engine is in all four of the titles that were tested**, and the
-argument, the measurements and the ladder as it actually played out are in
-[docs/aska-across-titles.md](docs/aska-across-titles.md). Star Ocean 4 is
-settled by `Aska::` in its executable and then by every reader here parsing its
-payloads; Resonance of Fate by AIF headers and the `SLZ` token in its
-executable; Star Ocean 5 by `SLZ` blocks whose walk closes exactly, inside the
-CPK archives of its PSN package; Star Ocean: Anamnesis on Android by 46 507
-mangled `Aska` symbols in its native library and an asset file named
-`aska0000.bin`.
+**Eight titles were tested and six of them are the same engine**, with the
+argument and every measurement in
+[docs/aska-across-titles.md](docs/aska-across-titles.md):
+
+| | |
+| --- | --- |
+| Radiata Stories, PS2 2005 | 26 254 sound `SLZ` blocks |
+| Valkyrie Profile 2, PS2 2006 | 25 431 sound `SLZ` blocks |
+| Star Ocean 4, X360 2009 | `Aska::` in the executable, and every reader here parses its payloads |
+| Resonance of Fate, X360 2010 | `SLZ`/`SLE` and AIF headers in the executable, 182 sound `AAC ` containers on the disc |
+| Star Ocean 5, PS3 2016 | `SLZ` blocks whose walk closes exactly, inside CRI `CPK` archives |
+| Star Ocean: Anamnesis, Android 2016 | 46 507 mangled `Aska` symbols, and an asset called `aska0000.bin` |
+| Beyond the Labyrinth, 3DS 2012 | **no** — nothing above chance, Nintendo's asset formats, no engine name |
+| Phantasy Star Nova, Vita 2014 | unanswerable — the naming convention matches, the payloads are behind a second encryption layer |
+
+The single most durable thing found is **`SLZ`**: present from 2005 to 2016
+across three CPUs, in three header revisions. The 2005 disc is what identifies
+the byte at `+0x03` as a compression method rather than a version, which one
+specimen alone could not settle.
 
 The questions that came out of it, none of which is about this disc:
 
 21. **Star Ocean 5's payload envelope.** 1 886 sound `ASF ` headers and 3 740
-    sound `AIF ` ones in the decrypted package, and not one opens: no `ao__` at
-    `0x20`, no `imgX` at `0x10`. Something sits between the magic and the
-    chunks, and 58 of 613 sampled headers carry the tag `PS3 `.
+    sound `AIF ` ones, and not one opens: no `ao__` at `0x20`, no `imgX` at
+    `0x10`. Something sits between the magic and the chunks, and 58 of 613
+    sampled headers carry the tag `PS3 `.
 
-22. **The compressed methods in Star Ocean 5's `SLZ`.** Byte `0x03` selects
-    one of three; method 0, stored, is readable and the rest are not. Not
-    XCompress and not plain LZSS.
+22. **The codecs behind `SLZ` on PlayStation 2 and PlayStation 3.** The method
+    byte selects one of three on both; only method 0, stored, is readable. It
+    is not XCompress, and not plain LZSS.
 
-23. **Resonance of Fate's container.** The executable proves the engine and the
-    disc shows nothing at all — every signature with a structural test scores
-    zero sound, and both containers are entropy 8.00 everywhere sampled.
+23. **Resonance of Fate's container.** The executable proves the engine and its
+    audio containers are on the disc, but its scenes, models and animations are
+    invisible: every other signature scores zero sound and both containers are
+    entropy 8.00 everywhere sampled.
 
-24. **Star Ocean 4's container.** Not one versioned tag on the whole disc, and
-    yet thousands of payloads behind `SLZ`. Something indexes them without
-    announcing itself the way `MRON` does.
+24. **What the PlayStation 2 pair call their assets.** Both discs are `SLZ` and
+    nothing else this repository recognises. Whatever is inside those 26 000
+    blocks is the 2005 vocabulary, and the codec question above is in the way
+    of reading it.
 
 25. **`EXD\0`, `mcd `, `MMD `** — three resource magics in Star Ocean 4's data
     with no reading here. `EXD\0` is the commonest payload in the sample.
-
-Two notes for anyone extending this to a fourth title. The **tests are
-asymmetric**: a hit on a versioned magic or on the engine namespace is
-conclusive, while a miss proves very little — Resonance of Fate is the worked
-example of a title that is certainly ASKA and shows nothing on its disc. And
-the **RTTI rung is closed**, more thoroughly than expected: neither Xbox 360
-title ships RTTI at all, and a PlayStation executable is encrypted behind
-NPDRM. What replaced it was plain strings in the binary.
 
 26. **The mobile class inventory.** `libSOA.so` carries 26 378 mangled `Aska`
     symbols resolving to 5 960 distinct two-level names — methods and members,
@@ -194,12 +198,18 @@ NPDRM. What replaced it was plain strings in the binary.
     Reading it properly needs an Itanium demangler, which `tools/rtti.py` is
     not.
 
-The remaining candidates all sit on little-endian hardware — Star Ocean 6 on
-x86, a PlayStation Vita title, anything else on mobile. `aska.py` now looks for
-the payload magics and `SLZ` both ways round, because Anamnesis showed that a
-FourCC stored as a 32-bit word *does* flip while the ASCII names do not. Every
-`struct` format string in the readers still assumes big-endian, so opening a
-little-endian title's payloads is a separate piece of work.
+27. **Beyond the Labyrinth's `P@CK` and `mpak`.** One bit from Star Ocean 4's
+    `PACK`, with the same header shape and different records, holding blocks
+    that are not `SLZ`.
+
+Two notes for anyone extending this further. The **tests are asymmetric**: a
+hit on a versioned magic or the engine namespace is conclusive, a miss proves
+very little — Resonance of Fate is the worked example, and its `AAC ` row is
+the worked example of the opposite mistake, a real finding dismissed as noise
+because the tool had no test for it. And the **RTTI rung is closed** on every
+console specimen: neither Xbox 360 title ships RTTI, and both PlayStation
+executables are encrypted. What replaced it was plain strings — and, on
+Android, 46 507 mangled symbols.
 
 ## Verified, needs no further work
 

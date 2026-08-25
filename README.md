@@ -59,7 +59,7 @@ docs/sessions/ chronological work log
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
 | `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
-| `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for twenty-five engine signatures in one pass — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, which it has now done — see the cross-title document — and honest about the fact that a negative result proves very little. |
+| `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for twenty-five engine signatures in one pass, in either byte order — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, which it has now done — see the cross-title document — and honest about the fact that a negative result proves very little. |
 | `tools/pkg.py` | Read a PlayStation 3 `.pkg` package: header, metadata, item table and extraction, through the AES-128-CTR run the whole thing sits behind. Written because Star Ocean 5's PS3 build was never pressed on a disc, so there was no filesystem to walk. |
 | `tools/node.py` | Read the NODE payload, the ASKA AI node field: the navigation-mesh polygons and what they connect to, the portal links with their precomputed route costs, the spatial partitions, an OBJ export of a map's walkable floor, and a corpus check. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
@@ -141,20 +141,23 @@ Container offsets for the European release are tabulated in
   battle architecture, the shader library.
 * [Is ASKA in tri-Ace's other titles?](docs/aska-across-titles.md) — the one
   document here that is not about this disc. Star Ocean 4, Resonance of Fate,
-  the PlayStation 3 build of Star Ocean 5 and the Android build of Star Ocean:
-  Anamnesis, measured against this baseline: what the engine kept, what it
-  renumbered, and how much of each is readable with the tools in this
-  repository. The answer is yes to all four, and it is a different answer in
-  each case.
+  Star Ocean 5 on PlayStation 3, Star Ocean: Anamnesis on Android, Beyond the
+  Labyrinth on the 3DS, Phantasy Star Nova on the Vita, and the two PlayStation
+  2 titles that came before this one — Radiata Stories and Valkyrie Profile 2 —
+  all measured against this baseline. Six of the eight are the same engine, one
+  is not, and one cannot be asked; `SLZ` runs through all of it from 2005 to
+  2016.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
   holds essentially all of the game's content.
 * [Resource payloads](docs/formats/resource-payloads.md) — what each resource
   tag actually contains, and the `A?F` file-kind family.
-* [SLZ](docs/formats/slz.md) — the compressed-resource wrapper, which turns out
-  to be Microsoft XCompress. Solved: all 1 812 blocks in disc 1's `ud1.bin`
-  decompress, with nothing left unexplained.
+* [SLZ](docs/formats/slz.md) — the compressed-resource wrapper, which on this
+  console turns out to be Microsoft XCompress. Solved: all 1 812 blocks in disc
+  1's `ud1.bin` decompress, with nothing left unexplained. It is also the
+  oldest thing in the engine, on a tri-Ace disc from 2005 and still there in
+  2016, in three header revisions.
 * [AIF](docs/formats/aif.md) — the Aska Image File: every texture in the game,
   stored in the Xbox 360 GPU's own tiled layout.
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource
@@ -189,8 +192,9 @@ Container offsets for the European release are tabulated in
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
-* [PKG](docs/formats/pkg.md) — the PlayStation 3 package, Sony's rather than
-  tri-Ace's, and the only way into the Star Ocean 5 specimen.
+* [PKG](docs/formats/pkg.md) — the PlayStation package, Sony's rather than
+  tri-Ace's, and the only way into the Star Ocean 5 and Phantasy Star Nova
+  specimens.
 * [XDBF](docs/formats/xdbf.md) — the title metadata database, achievements
   included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this

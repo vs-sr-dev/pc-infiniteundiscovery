@@ -1,29 +1,28 @@
-# Session 13 — the engine in four other games
+# Session 13 — the engine in eight other games
 
 **Date:** 2026-08-25
 **Goal:** the second front named at the end of [TODO.md](../../TODO.md) — does
 the ASKA engine appear in tri-Ace's other titles, and does enough of it survive
-to be readable with the tools here? Three specimens to start with: *Star
+to be readable with the tools here? Three specimens to start with — *Star
 Ocean: The Last Hope* (2009, Xbox 360), *Resonance of Fate* (2010, Xbox 360)
-and *Star Ocean: Integrity and Faithlessness* (2016, PlayStation 3, Japanese).
-A fourth, *Star Ocean: Anamnesis* on Android, arrived while they were being
-measured.
+and *Star Ocean: Integrity and Faithlessness* (2016, PlayStation 3, Japanese)
+— and five more arrived while those were being measured: *Star Ocean:
+Anamnesis* on Android, *Beyond the Labyrinth* on the 3DS, *Phantasy Star Nova*
+on the Vita, and two PlayStation 2 discs three years older than this one,
+*Radiata Stories* and *Valkyrie Profile 2: Silmeria*.
 
 ## Outcome
 
-**Yes, all four.** The full argument, with every measurement, is in
+**Yes for six of the eight.** The full argument, with every measurement, is in
 [aska-across-titles.md](../aska-across-titles.md); this log is what happened
 and what it cost.
 
-A fourth specimen arrived mid-session — the Android build of **Star Ocean:
-Anamnesis** — and settled itself in minutes. The four turned out to be four
-different situations rather than four answers to one question:
-
-| | Star Ocean 4 | Resonance of Fate | Star Ocean 5 | Anamnesis |
-| --- | --- | --- | --- | --- |
-| Settled by | `Aska::` in the executable | AIF headers in the executable | `SLZ` and payload magics in the data | 46 507 mangled `Aska` symbols |
-| Container | **gone** — no `MRON` on the disc | unreadable, entropy 8.00 | CRI `CPK`, middleware | `assets/aska0000.bin` |
-| Payloads | **readable, all of them** | none visible | magic and length only | byte-reversed |
+The specimens turned out to be eight different situations rather than eight
+answers to one question, and the per-title summary is the table in
+[§1 of the cross-title document](../aska-across-titles.md#1-the-short-version).
+The one-line version: **Star Ocean 4 is the only title whose data this
+repository can read end to end**, Beyond the Labyrinth is the only one that
+says no, and Phantasy Star Nova is the only one that cannot be asked.
 
 ## What was worth the day
 
@@ -65,6 +64,27 @@ So the instruction encoding is shared and the opcode table is not. **Question 1
 has to be answered inside Infinite Undiscovery**, and knowing that cost an hour
 rather than a session.
 
+## The oldest thing in the engine
+
+The two PlayStation 2 discs were the last to arrive and gave the best result.
+Radiata Stories (2005) carries **26 254 sound `SLZ` blocks** and Valkyrie
+Profile 2 (2006) **25 431**, and their executables carry the `SLZ`/`SLE`
+constant pair that all three Xbox 360 executables also carry — five titles,
+three CPUs, 2005 to 2010.
+
+Their header is one word shorter than the one
+[slz.md](../formats/slz.md) described, and that is what makes them worth
+having. **The byte at `+0x03` is a compression method, and it always was.**
+Infinite Undiscovery writes a constant 4 there, so from this disc alone it
+reads like a version; Star Ocean 5 showed it selecting a codec and Star Ocean
+4's stored blocks agreed, and Radiata settles it — of 661 blocks sampled from
+three widely separated regions, the 68 that say 0 have their two sizes equal
+and their payload in the clear, one of them opening with `SEQW`. The zero word
+at `+0x0C` and the ordered size pair hold on 661 of 661.
+
+Between 2005 and 2008 exactly one word was inserted at `+0x04`. Nothing else
+moved.
+
 ## Tooling
 
 Five tools changed and one is new.
@@ -94,7 +114,7 @@ leaves zero padding behind the last frame where Infinite Undiscovery lands
 exactly on the end. The padding is still checked, so a walk that goes wrong
 still fails.
 
-**`tools/aska.py` — four changes.**
+**`tools/aska.py` — six changes.**
 
 * A **chunk-boundary double count** is fixed. The 64-byte overlap between
   chunks meant any signature landing in it was counted twice, and the fix is a
@@ -110,22 +130,45 @@ still fails.
 * **The payload magics are looked for reversed as well**, along with `SLZ`,
   after Anamnesis showed that a FourCC stored as a word does not survive a
   change of byte order the way an ASCII name does.
+* **The SLZ validator knows all three revisions**, the PlayStation 2 one
+  included, each tested on its own terms.
+* **`AAC ` has a validator at last**, which is the fix for the mistake below.
 
 **`tools/aaf.py` — a second known version.** Star Ocean 4 writes `0x190000`
 where Infinite Undiscovery writes `0x16`, and nothing else about the format
 moved. Both are accepted so a self-check reports what is actually wrong.
 Infinite Undiscovery's own corpus still reads 900 of 900 clean.
 
+## The mistake worth recording
+
+Resonance of Fate was written up as showing nothing at all on its disc, on the
+grounds that every signature with a structural test scored zero sound. That was
+true and the conclusion was wrong: `AAC ` had **no** test, and its raw count was
+185 on 7.3 GiB where chance produces about two. A hundred times chance was
+filed as noise.
+
+Checked properly, 26 of 26 `AAC ` magics in a 256 MiB window have the same
+version word `0x00020100`, a plausible total size, and land **exactly on a
+2048-byte boundary** — one in 2048 by chance. They are audio containers, with a
+header revised from Infinite Undiscovery's `0x00010003`.
+
+`aska.py` now validates `AAC ` on a size that makes sense over two words that
+are zero in both revisions, and the sweeps were run again. The lesson is the
+one the sound column exists to enforce, and it failed here because the column
+was empty rather than because it was wrong.
+
 ## The baseline was re-measured
 
-The sweep table in TODO.md was produced before the double-count fix and before
-`AHSL` was added, so all four sweeps in this session were run again from
-scratch with the same tool, and the table in
+The tool changed three times during the session — the double-count fix, then
+`AHSL` and the reversed magics, then the `AAC ` and three-revision `SLZ`
+validators — and each time every sweep was run again from scratch, six of them
+at the end, so that no column is measured differently from its neighbours. The
+table in
 [aska-across-titles.md](../aska-across-titles.md#5-what-the-sweep-found)
-replaces it. Comparing counts across titles is the whole point of that table,
-so it is not worth having one column measured differently from the others.
+replaces the one that used to be in TODO.md. Comparing counts across titles is
+the whole point of it, and three re-runs is a cheap price for that.
 
-## The fourth specimen, and the assumption it broke
+## The Android specimen, and the assumption it broke
 
 Star Ocean: Anamnesis is 58 MB of Android APK, and it needed no ladder at all:
 `lib/arm64-v8a/libSOA.so` carries **46 507** hits of `4Aska` in Itanium
@@ -142,6 +185,30 @@ written out as a 32-bit word does not**: this build stores `AIF ` as ` FIA`.
 The payload magics, `SLZ` and the node-field constant are now looked for both
 ways round, with validators that read the length in the matching order — which
 matters for every remaining candidate, since all of them are little-endian.
+
+## What the later specimens added
+
+**Beyond the Labyrinth (3DS, 2012) is the first no.** Every signature at chance
+in both byte orders, Nintendo's `CTPK`, `CGFX` and `DVLB` for its assets, and a
+`.code` — decompressed through the console's backward LZ77 — that names no
+engine. What it does share is the layer above the formats: a `P@CK` container
+one bit from Star Ocean 4's `PACK`, a RomFS of 1 313 `f0000.bin` files, and the
+same material naming as Infinite Undiscovery and Star Ocean 4.
+
+**Phantasy Star Nova (Vita, 2014) cannot be asked.** `pkg.py` grew a Vita path
+— the key encrypts the package's own RIV, and the right one is found by trying
+each candidate until the item table holds together — and every check passes on
+all 85 items. Underneath is PFS, whose key is sealed by the licence. The test
+that tells a second layer from a wrong key is a file whose first bytes are known
+in advance: `sce_sys/pic0.png` is not a PNG under any candidate, while the same
+key reads all 85 filenames. Its listing carries `disc1/f00000.bin` and CRI
+`CPK` archives, which is the naming convention and the middleware, and nothing
+more can honestly be claimed.
+
+**Star Ocean 4's container is `PACK`.** Absent from Infinite Undiscovery, 32
+archives in `soz1.bin` with the first at offset 0, a table of (id, flags, size,
+offset) whose header ends exactly where the first entry points, and every entry
+holding an `SLZ` block whose uncompressed size matches the table's on 13 of 14.
 
 ## Left open
 

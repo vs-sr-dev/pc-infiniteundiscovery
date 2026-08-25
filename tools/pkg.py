@@ -66,6 +66,20 @@ MAGIC = b"\x7fPKG"
 # The retail PS3 package key -- a constant, the same in every retail package.
 PS3_AES_KEY = bytes.fromhex("2e7b71d7c9c9a14ea3221f188828b8f8")
 
+# A PlayStation Vita package is the same container with a different key, and
+# the key is not used directly: it encrypts the package's own RIV, and the
+# result is what drives the counter. Which of these bases applies depends on
+# the content type, and rather than encode that table -- the published
+# versions of it disagree -- every candidate is tried and the one whose item
+# table passes `checks()` is the one that is right. A wrong key cannot fake
+# 82 consecutive runs of printable ASCII landing exactly where a u32 said.
+DERIVED_KEY_BASES = [
+    ("Vita, key 2", bytes.fromhex("e31a70c9ce1dd72bf3c0622963f2eccb")),
+    ("Vita, key 3", bytes.fromhex("423aca3a2bd5649f9686abad6fd8801f")),
+    ("Vita, key 4", bytes.fromhex("af07fd59652527baf13389668b17d9ea")),
+    ("PSP", bytes.fromhex("07f2c68290b50d2c33818d709b60e62b")),
+]
+
 HEADER_SIZE = 0xC0
 ITEM_SIZE = 0x20
 CHUNK = 1 << 24
@@ -122,17 +136,59 @@ class Package(object):
         # turns this file into a table of printable filenames.
         self.retail = self.revision == 0x8000
         self._table = None
+        self._key = None
+        self._key_name = None
 
     # -- the encrypted run -------------------------------------------------
 
-    def _cipher_at(self, at):
-        """A cipher positioned `at` bytes into the data run."""
+    def _candidate_keys(self):
+        """Every key this package might use, most likely first."""
         if AES is None:
             raise SystemExit("pkg.py needs pycryptodome "
                              "(pip install pycryptodome)")
+        out = [("PS3", PS3_AES_KEY)]
+        for name, base in DERIVED_KEY_BASES:
+            out.append((name, AES.new(base, AES.MODE_ECB).encrypt(self.riv)))
+        if self.pkg_type != 1:
+            out.reverse()          # a Vita package is unlikely to be the PS3 one
+        return out
+
+    def _choose_key(self):
+        """The key whose item table holds together.
+
+        Chosen by trying rather than by looking the content type up in a
+        table, because `_table_valid` is a real test and the published tables
+        of which key goes with which content type disagree.
+        """
+        for name, candidate in self._candidate_keys():
+            self._key, self._key_name, self._table = candidate, name, None
+            if self._table_valid():
+                return
+        self._key, self._key_name, self._table = None, None, None
+        raise ValueError("no known key produces a usable item table")
+
+    def _table_valid(self):
+        try:
+            items = self.table
+        except Exception:
+            return False
+        if not items:
+            return False
+        table_end = self.item_count * ITEM_SIZE
+        if table_end > self.data_size:
+            return False
+        if any(it["at"] + it["size"] > self.data_size for it in items):
+            return False
+        return all(re.fullmatch(rb"[\x20-\x7e]+", it["name"] or b"")
+                   for it in items)
+
+    def _cipher_at(self, at):
+        """A cipher positioned `at` bytes into the data run."""
+        if self._key is None:
+            self._choose_key()
         counter = (int.from_bytes(self.riv, "big") + (at // 16)) \
             & ((1 << 128) - 1)
-        return AES.new(PS3_AES_KEY, AES.MODE_CTR, nonce=b"",
+        return AES.new(self._key, AES.MODE_CTR, nonce=b"",
                        initial_value=counter.to_bytes(16, "big"))
 
     def read(self, at, length):
@@ -174,8 +230,16 @@ class Package(object):
 
     def checks(self):
         """Every invariant, as (description, ok, detail)."""
+        if self._key is None:
+            try:
+                self._choose_key()
+            except ValueError:
+                pass
         out = [("magic and revision", True, "%s, revision 0x%04X"
                 % ("retail" if self.retail else "debug", self.revision)),
+               ("a known key gives a usable table", self._key is not None,
+                self._key_name or "none of %d candidates"
+                % (1 + len(DERIVED_KEY_BASES))),
                ("total size matches the file", self.total_size == self.size,
                 "header says %d, file is %d" % (self.total_size, self.size)),
                ("data run inside the file",
