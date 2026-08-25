@@ -20,12 +20,21 @@ Every chunk has the same 16-byte header, big-endian:
 | --- | --- | --- |
 | `+0x00` | 4 | Tag, four printable ASCII characters |
 | `+0x04` | 4 | Content size, header included |
-| `+0x08` | 4 | Zero in everything seen so far |
+| `+0x08` | 4 | Zero in everything seen so far — a **vestigial back-link**; see below |
 | `+0x0C` | 4 | Step to the next sibling; zero means "same as the content size" |
 
 The two sizes differ when the content is not a multiple of 16 — `bnpl` holds
 `0x14` bytes of content in a `0x20`-byte slot. Following the step lands exactly
 on the end of the parent, and the file closes with a 16-byte `eof_`.
+
+**The word at `+0x08` is a back-link that stopped being used.** The same
+16-byte header is on Star Ocean 3's PlayStation 2 disc in 2003, and there that
+word holds the **previous sibling's step** — on 3 981 of 3 981 chunks, making
+the list doubly linked. The 2003 header also counts its size with the header
+*excluded* rather than included. Everything else is identical.
+[aska-across-titles.md §14](../aska-across-titles.md#14-the-chunk-container-is-five-years-older-than-aska)
+has the measurements, and the reason this could not be seen before session 17:
+those payloads sit behind the codec that was unread until then.
 
 There is one wrinkle. `vlas` states an *unrounded* step, so a chunk containing
 one finishes a few zero bytes short of its parent's end. A walk is therefore

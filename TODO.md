@@ -326,12 +326,19 @@ The questions that came out of it, none of which is about this disc:
     (26), and on Radiata Stories `Kods` (1 163), `RMF1` (549), `RBAD` (256),
     `RLF2` (255), with `SEQW` on 553 of its 557 **stored** blocks.
 
-    What is left is what was left before: a **reader** rather than a
-    decompressor. `SAF` and `ATR` are still the two commonest payloads on all
-    three discs, both open completely, and both carry a 3ds Max biped skeleton
-    and a node name table; whether `SAF` is the ancestor of `ASF ` is a
-    question the structure can answer and nobody has asked it yet. The new
-    tags above have no readers at all.
+    **And the container walks.** These payloads use a 16-byte chunk header of
+    tag, size, back-link and step, which tiles 300 of 300 files exactly and is
+    `ASF `'s header with two differences — the size excludes the header rather
+    than including it, and the word `ASF ` leaves zero at `+0x08` holds the
+    previous sibling's step. An `SPF` holds `LIGT`, `MODI`, `PTCL` and a `CD**`
+    collision family, which is a **scene**. See
+    [docs/aska-across-titles.md §14](docs/aska-across-titles.md#14-the-chunk-container-is-five-years-older-than-aska).
+
+    What is left is a **reader for the chunk contents**. `SAF` and `ATR` are
+    still the two commonest payloads on all three discs, both carry a 3ds Max
+    biped skeleton and a node name table, and `SAF` contains exactly one other
+    chunk, `SAFH`. Nothing here has been put through `asf.py` yet, and that is
+    now a cheap experiment rather than a blocked one.
 
 25. **`EXD\0`, `mcd `, `MMD `** — three resource magics in Star Ocean 4's data
     with no reading here. `EXD\0` is the commonest payload in the sample. One

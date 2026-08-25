@@ -1016,3 +1016,85 @@ came from.** tri-Ace's own distance field was fixed with a known-plaintext
 search precisely because sizes could not fix it. The check has now been run in
 both directions — see
 [slz.md §2d-1](formats/slz.md#2d-1-what-the-first-reading-got-wrong-and-why-its-tests-could-not-tell).
+
+## 14. The chunk container is five years older than ASKA
+
+Sessions 17 and 18 were about compression, which is a layer *below* the engine
+and says little about it directly. This section is what fell out of them once
+the compression stopped being in the way, and it is about the engine.
+
+Method 3 is the default on the PlayStation 2 discs, so until session 17 most of
+those discs could not be read at all. They can now, and the first thing worth
+walking is Star Ocean 3's `SPF` payloads — written `FPS\0`, since the tags are
+`u32` little-endian there and read backwards on disc.
+
+### The header
+
+`ASF `, on the Xbox 360 in 2008, gives every chunk the same 16-byte header —
+[asf.md §1](formats/asf.md#1-a-tree-of-chunks). The 2003 payloads give every
+chunk the same 16-byte header too, and it is nearly the same one:
+
+| Offset | Star Ocean 3, 2003, little-endian | `ASF `, 2008, big-endian |
+| --- | --- | --- |
+| `+0x00` | four-character tag | four-character tag |
+| `+0x04` | content size, **header excluded** | content size, **header included** |
+| `+0x08` | **the previous sibling's step**; zero on the first | **zero in everything ever seen** |
+| `+0x0C` | step to the next sibling; zero means "last" | step to the next sibling; zero means "the content size" |
+
+Three measurements, over 300 decoded payloads:
+
+| | |
+| --- | --- |
+| files whose chunks tile exactly, first byte to last | **300 of 300** |
+| chunks whose `+0x08` equals the previous chunk's step | **3 981 of 3 981** |
+| chunks whose step is exactly their size plus 16 | **3 981 of 3 981** |
+| files with exactly one zero-step chunk, and it is the last | **300 of 300** |
+
+So the container idiom that `ASF `, `AAF `, `ACF ` and `AAC ` are all built on
+is not an ASKA invention. It is on a disc from **2003**, five years before
+Infinite Undiscovery, doing the same job.
+
+### And it answers a question this repository had left open
+
+`ASF `'s word at `+0x08` is zero in every chunk of every file, and
+[asf.md](formats/asf.md#1-a-tree-of-chunks) records it as exactly that — a
+field that is always zero and does nothing.
+
+**It is a back-link.** On the 2003 disc that word holds the previous sibling's
+step, on 3 981 of 3 981 chunks, which makes the chunk list doubly linked and
+walkable backwards. By 2008 nobody needed to walk it backwards, and the field
+stayed where it was with a zero in it.
+
+That is a small thing to know and a nice one: an unexplained constant in the
+current format turns out to be a feature the ancestor used.
+
+### What an `SPF` holds
+
+Walking the top level of 200 payloads and reading the tags backwards:
+
+| Root | Files | Top-level chunks |
+| --- | ---: | --- |
+| `SPF` | 126 | `SPF`, `SSF`, `LIGT` |
+| `SPF` | 47 | `SPF`, `SSF`, `MODI`, `LIGT` |
+| `SPF` | 8 | `SPF`, `SSF`, `MODI`, `PTCL`, `LIGT` |
+| `SPF` | 1 | `SPF`, `SSF`, `MODI`, `CDPL`, `CDCP`, `CDBX`, `CNDN` |
+| `SAF` | 17 | `SAF`, `SAFH` |
+
+Lights, models, particles, and a family of collision primitives — `CD` plus a
+two-letter shape, `PL`, `CP`, `BX`, `NDN`. That is the composition of a
+**scene**, which is what `ASF ` is: the Aska Scene File. And `PTCL` is not a
+new name either — it is `ptcl`, the particle chunk
+[still unread inside `ASF `](../TODO.md), under the same four letters five years
+earlier, sitting in the same position in the same kind of container.
+
+`SAF` holding exactly one other chunk, `SAFH`, reads as a payload and its
+header, and is the reason the `SAF`-to-`ASF ` question is worth asking properly
+rather than by name resemblance.
+
+### What this does not show
+
+The chunk *contents* have not been compared. A shared container idiom and a
+shared vocabulary put the two formats in the same lineage; they do not make the
+2003 chunks readable with the 2008 readers, and nothing here has been tried
+against `asf.py`. That is the next measurement, and it is now cheap.
+
