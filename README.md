@@ -58,6 +58,7 @@ docs/sessions/ chronological work log
 | `tools/slz.py` | The SLZ compressed-resource wrapper, with bulk self-verification against payload self-reported lengths. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
+| `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
@@ -95,6 +96,13 @@ python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 22
 python tools/acf.py tree  extract/coll/49450000_036_COLL.acf
 python tools/acf.py obj   extract/coll/49450000_036_COLL.acf collision.obj
 python tools/acf.py check "extract/coll/*.acf" --models "extract/models/*.asf"
+
+# Pull out the scene scripts and read one
+python tools/mron.py extract "path/to/disc1.iso" --offset 3919380480 --length 2800330752 --tag SCE- --decompress extract/scene
+python tools/snc.py info    extract/scene/4F0A3000_041_SCE.bin
+python tools/snc.py strings extract/scene/4F0A3000_041_SCE.bin
+python tools/snc.py dis     extract/scene/4F0A3000_041_SCE.bin --limit 40 --blocks
+python tools/snc.py check   extract/scene/*.bin
 
 # Walk the music, which sits between the archives rather than inside them
 python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
@@ -148,6 +156,13 @@ Container offsets for the European release are tabulated in
   spheres, cubes and capsules, hung off the same bones the scene and the
   animation name. Solved: all 972 files pass every check, and the shape code
   agrees with the name the artist typed on all 8 119 primitives that carry one.
+* [SNC](docs/formats/snc.md) — the Aska scene script: the compiled script
+  behind every `SCE-` resource, and what actually drives a model. Solved as a
+  container and an instruction set: all 61 payloads on both discs parse, every
+  string, data-block and code-address reference resolves, and each of the 253
+  opcodes has exactly one operand count. Seven opcodes are identified from the
+  Maya node names they are given and from a quaternion that is a unit
+  quaternion 987 times out of 990.
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
@@ -197,8 +212,17 @@ are named after bones, with three independent checks on the shape reading —
 the redundant bounding radius, the file's own length, and the name the artist
 typed in Maya.
 
-What remains is the scene scripting behind `SCE-`. It is a plain file sitting
-behind tools that work, rather than a question blocked on compression.
+Session 10 opened the scene scripting behind `SCE-`. `SNC-` is a compiled
+script whose container and instruction encoding are now solved: 420 532
+instructions across 61 payloads walk exactly, all 18 666 code addresses, all
+413 467 data-block references and all 5 035 string references resolve, and
+every one of the 253 opcodes has a single operand count. The engine's own RTTI
+names the tagged eight-byte operand the format is built from — `sce::Var`.
+Seven opcodes are identified: what a scene spawns, where it stands, which bone
+it hangs off, and which light and shadow belong to it.
+
+What remains is mostly meaning rather than structure — 246 of the 253 opcodes
+are known by number, arity and operand kinds but not by what they do.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.

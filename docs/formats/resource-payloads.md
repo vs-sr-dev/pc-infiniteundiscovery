@@ -17,7 +17,7 @@ once.
 | `SOND` | `AAC ` | [Aska Audio Container](aac.md) — XMA2 |
 | `MESH` | `SLZ` → `ASF ` | Aska Scene File, compressed |
 | `MTEX` | `SLZ` → `AIF ` | image, compressed — or a nested archive |
-| `SCE-` | `SLZ` → `-CNS00.3` | `SNC-` version 3.00, compressed |
+| `SCE-` | `SLZ` → `-CNS00.3` | [`SNC-` scene script](snc.md), version 3.00, compressed |
 | `SKAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
 | `APAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
 | `EPAC` | `MRON00.2` | nested NORM archive |
@@ -28,7 +28,7 @@ once.
 | `MINI` | `INIM00.1` | `MINI` version 1.00 |
 | `SIG-` | `-GIS00.1` | `SIG-` version 1.00 |
 | `TTD-` | `DTT\0` | unidentified |
-| `NODE` | — | no magic, raw data |
+| `NODE` | — | no magic, raw data — travels beside `SCE-` |
 
 ## The `A?F` family
 
@@ -99,8 +99,10 @@ MRON00.2  ->  NORM  2.00
 ```
 
 `SNC-` is the odd one: it comes from a `SCE-` resource, and the two names are
-close enough to be the same concept ("scene") under two spellings, but that is
-a reading rather than a finding.
+close enough to be the same concept ("scene") under two spellings. That is now
+more than a reading — [session 10](../sessions/session-10.md) showed the
+payload is a compiled scene script, and the executable calls its namespace
+`sce`. See [snc.md](snc.md).
 
 ## What the image payloads turned out to be
 
@@ -119,6 +121,16 @@ disc 1's `ud1.bin` settled two of the tags above:
 atlases, damage-number sheets. Every `AIF ` also carries a four-character asset
 identifier whose prefix groups it — `CH` character, `BG` background, `EF`
 effect, `PG` interface.
+
+## Not every SLZ block is compressed
+
+A handful of payloads sit behind an SLZ wrapper that gives the **same value
+for the compressed and the uncompressed size**, with no XCompress stream
+behind it. The payload is simply the stated number of bytes starting at
+`0x18`. Seven of disc 1's 40 `ud2.bin` `SCE-` resources are stored that way,
+all of them under 200 bytes. `tools/mron.py --decompress` reports them as
+failures — *no XCompress magic at 0x18* — which is worth recognising before
+assuming a decompressor bug.
 
 ## Reproducing
 

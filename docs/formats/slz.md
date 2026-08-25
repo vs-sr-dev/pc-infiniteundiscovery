@@ -189,6 +189,16 @@ the shipped data, and the rest with arrays of plausible floats. Decoded
 payloads by magic: `ASF ` 916, `AAC ` 349, `MRON` 324, `AIF ` 156, `AAF ` 62,
 `-CNS` 4.
 
+## 6a. Some blocks are stored, not compressed
+
+A wrapper whose **compressed size equals its uncompressed size** has no
+XCompress stream behind it at all: the payload is simply that many bytes
+starting at `0x18`. None of disc 1's `ud1.bin` blocks are like that, which is
+why session 3 never met one, but seven of the 40 `SCE-` resources in `ud2.bin`
+are — all of them under 200 bytes, where compression would not pay. A decoder
+should check the two sizes before looking for the magic at `0x18`, or it will
+report a corrupt block that is nothing of the kind.
+
 ## 7. Implementation
 
 * [`tools/lzx.py`](../../tools/lzx.py) — the LZX decoder, written from the
