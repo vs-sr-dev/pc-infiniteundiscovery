@@ -36,9 +36,10 @@ found that **`SLE` is not there in 1998 or 1999**, which is question 28.
 Session 16 asked the last question of a different kind: **Eternal Sonata**, by
 tri-Crescendo — the studio founded by people who left tri-Ace — on the same
 console and in the same years as this game. It carries no engine, no container
-and no payload format, and it carries **the codec, one swapped nibble apart,
-and the method byte beside it**. So the oldest layer travelled with the people
-and nothing above it did.
+and no payload format, and it appeared to carry **the codec, one swapped
+nibble apart, and the method byte beside it** — so, it concluded, the oldest
+layer travelled with the people and nothing above it did. *Session 18 read
+that codec properly and the conclusion did not survive; see below.*
 
 It also found a bug in `aska.py`: the verdict rule counted signatures with no
 structural test at their raw hit count, so one chance match on a seven-gigabyte
@@ -61,10 +62,36 @@ Eternal Sonata and Star Ocean 5 data and applied to a codec on different
 hardware. **Negative results do not travel between titles the way positive ones
 do**, which is session 13's asymmetry note pointing the other way.
 
-The best remaining lead across all of it is now **question 29**: Eternal
-Sonata's methods 2 and 3, which hold 961 of its 1 105 files, are confirmed
-*not* to be tri-Ace's, and its `default.xex` is a decrypted 5.7 MB PowerPC
-image with the same free check available. The same technique, one console over.
+Session 18 did the same to Eternal Sonata, and the answer reframed the title's
+whole entry in this repository. Its method byte is **not a codec selector**:
+the loader tests two bits of it separately, bit 0 for an LZSS layer and bit 1
+for a range coder, so method 3 is method 1 running on top of method 2. Both
+layers are famous public routines — **Okumura's `lzss.c`** and **Subbotin's
+carryless range coder**, the second over a static order-0 model shipped as the
+first 256 bytes of each file. [docs/formats/vmtoc.md](docs/formats/vmtoc.md)
+specifies all of it.
+
+That corrected session 16 twice. Its method-1 decode was **wrong in its match
+target** — the 12-bit field is an absolute ring position, not a back-distance —
+and its tests could not have caught it: output size and input consumption are
+blind to where a match copies from, and its two content checks both sit in the
+literal prefix, before the byte at which the two readings first disagree. And
+with the codec turning out to be stock, session 16's headline that "the oldest
+layer travelled with the people" no longer stands. What travelled is
+**convention** — a method code of 0..3 with 0 meaning stored, and the magic
+style — not code.
+
+Two corrections in two sessions, in opposite directions, from the same cause:
+**a test that counts bytes cannot check where bytes came from.** Sizes and
+input consumption pin framing and length; only content pins the match target.
+Every distance field in this repository that was fixed by a size test alone
+should be re-checked against content.
+
+The best remaining lead is now the last open piece of **question 22**: Star
+Ocean 5's PlayStation 3 codecs, the only unread compression left in this
+repository. Same numbering, same stored method 0, and neither studio's codecs
+decode it. Opening them would also unblock **question 21**, its payload
+envelope.
 
 ## Now the main line of work
 
@@ -215,7 +242,7 @@ different question — see the row at the end of the table:
 | Resonance of Fate, X360 2010 | `SLZ`/`SLE` and AIF headers in the executable, 182 sound `AAC ` containers on the disc |
 | Star Ocean 5, PS3 2016 | `SLZ` blocks whose walk closes exactly, inside CRI `CPK` archives |
 | Star Ocean: Anamnesis, Android 2016 | 46 507 mangled `Aska` symbols, and an asset called `aska0000.bin` |
-| *Eternal Sonata*, X360 2007, **tri-Crescendo** | not the engine — but the method-1 codec one nibble apart, the method byte, and the magic style |
+| *Eternal Sonata*, X360 2007, **tri-Crescendo** | not the engine, and **not the codec either** — Okumura's LZSS over Subbotin's range coder. What is shared is the method byte and the magic style |
 | Beyond the Labyrinth, 3DS 2012 | **no** — nothing above chance, Nintendo's asset formats, no engine name |
 | Phantasy Star Nova, Vita 2014 | unanswerable — the naming convention matches, the payloads are behind a second encryption layer |
 
@@ -260,13 +287,11 @@ The questions that came out of it, none of which is about this disc:
     What is left of this question is elsewhere, and is now three separate
     smaller ones:
 
-    * **Eternal Sonata's methods 2 and 3** — 961 files, and *not* tri-Ace's.
-      Both were re-tested here in both nibble orders and reach the stated size
-      only by overrunning it on a third of the input. So question 29 needs its
-      own disassembly, and the route is the one that worked: `default.xex`,
-      5.7 MB of PowerPC at `0x82000000`, anchor `index.vmtoc` at `+0x82E92`,
-      method byte at record `+0x24`, and method 1 already known as a free
-      check. `capstone` handles PowerPC.
+    * **Eternal Sonata's methods 2 and 3** — *answered in session 18, by the
+      same route*. Not tri-Ace's, and not even a third codec: its method byte
+      is two flag bits over Okumura's LZSS and Subbotin's range coder —
+      [docs/formats/vmtoc.md](docs/formats/vmtoc.md). What is left of that
+      title is its payload formats, which is question 29.
     * **Star Ocean 5's PlayStation 3 methods** — same numbering, same stored
       method 0, and now measured rather than assumed to be different: methods
       1, 2 and 3 were each run against 400 of its blocks and decode none. A
@@ -345,11 +370,30 @@ The questions that came out of it, none of which is about this disc:
     it is a single `lq` from `0x001CC730`, past the end of the loaded image,
     and nothing in the executable writes it.
 
-29. **Eternal Sonata's payload formats.** `.bop`, `.x3tex`, `.e` and the
-    `.bmd` family, all headerless, all behind methods 2 and 3 except one. Only
-    `BMD ` has shown a magic. Related: what the `BOOK` block inside `CSF ` is —
-    the word is what ADPCM coefficient tables are called on several consoles,
-    and 60 stored files carry it.
+29. **Eternal Sonata's payload formats.** *Unblocked.* The compression is no
+    longer in the way: all four methods read —
+    [docs/formats/vmtoc.md](docs/formats/vmtoc.md) — so `.bop`, `.x3tex`,
+    `.e`, `.tex` and the `.bmd` family are now ordinary unread formats rather
+    than entropy. `tools/vmtoc.py extract` writes them out of the retail
+    image.
+
+    Four leads are visible from the first bytes alone, and none has a reader:
+
+    * `BOP `, `BMD ` and `CAMP` all **state their own length at `+0x04`**, so
+      each has a size field to walk from.
+    * `.x3tex` decodes to `NTX2` with Microsoft's **`XPR2`** at `+0x08` — a
+      documented Xbox 360 texture package, so that one is a wrapper around a
+      known format rather than a new format.
+    * the `.e` scripts open with a 16-byte header whose `+0x04` is a **Unix
+      timestamp matching the index to the second** and whose `+0x0C` is the
+      file's own length.
+    * `CXS `, 62 files, is the one format whose `+0x04` is *not* a length: it
+      holds `0x800` against an index size of 452 608 on `sound/cxs/mp118.cxs`.
+
+    And the original sub-question stands, now answerable: **what the `BOOK`
+    block inside `CSF ` is.** The word is what ADPCM coefficient tables are
+    called on several consoles, 60 stored files carry it, and a decoded
+    method-3 `CSF ` puts it at `+0x10` exactly where the stored ones do.
 
 30. **The offset-table archive inside the PlayStation blocks.** A run of `u32`
     offsets whose first entry is the size of the table itself — the same

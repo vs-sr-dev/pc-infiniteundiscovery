@@ -56,7 +56,8 @@ docs/sessions/ chronological work log
 | `tools/xdbf.py` | Read the XDBF title-metadata database embedded in the executable: achievements in every shipped language, string tables, embedded PNGs. |
 | `tools/lzx.py` | LZX decompressor for the XCompress variant, written from the published algorithm. Frame-based and stateful, which is what the format actually requires. |
 | `tools/slz.py` | The SLZ compressed-resource wrapper, in both of its shipped forms: the Xbox 360 header around a Microsoft XCompress stream, with bulk self-verification against payload self-reported lengths, and the shorter PlayStation header around tri-Ace's own LZ77 — **all four of its methods**, which are one codec with three settings. Censuses a PlayStation or PlayStation 2 image, decoding it and naming the payloads. |
-| `tools/disasm.py` | Find the code behind a string in a PlayStation `PS-X EXE` or PlayStation 2 ELF: locate the magic, scan for the `lui`/`addiu` pairs that build its address, print a pointer table with the gaps between its targets, and disassemble — with the R5900's `lq`/`sq` handled rather than mis-decoded as vector instructions. This is how methods 2 and 3 were read. |
+| `tools/disasm.py` | Find the code behind a string, in MIPS or PowerPC: a PlayStation `PS-X EXE`, a PlayStation 2 ELF, or a decrypted Xbox 360 image given `--base`. Locates the magic, scans for the two-instruction pairs that build its address, prints a pointer table with the gaps between its targets, and disassembles — with the R5900's `lq`/`sq` handled rather than mis-decoded as vector instructions, and never stopping on a word capstone cannot read. This is how four compressors were read. |
+| `tools/vmtoc.py` | Eternal Sonata's `index.vmtoc` and the two compression layers under it: an Okumura LZSS and a Subbotin range coder, selected by two flag bits of the index's method byte. Lists, verifies and extracts straight out of the retail image. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
 | `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
@@ -150,8 +151,9 @@ Container offsets for the European release are tabulated in
   it wraps nothing of tri-Ace's at all, which dates the wrapper as older than
   the engine's own file formats. A thirteenth specimen asks a different
   question: *Eternal Sonata*, by the offshoot studio **tri-Crescendo**, carries
-  no engine and no container but does carry that same codec with one nibble
-  swapped, and the method byte beside it.
+  no engine and no container, and its compression turned out on a second look
+  to be two stock public routines rather than tri-Ace's — so what the people
+  who left took with them is the **convention**, not the code.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
@@ -213,6 +215,10 @@ Container offsets for the European release are tabulated in
   included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this
   title's header values.
+* [`index.vmtoc`](docs/formats/vmtoc.md) — not this game's: Eternal Sonata's
+  archive index and its two compression layers, read off the executable. The
+  method byte there is two flag bits rather than a codec number, so its
+  method 3 is its method 1 on top of its method 2.
 * [XDVDFS](docs/formats/xdvdfs.md) — the on-disc filesystem, fully specified.
 * [`docs/census.txt`](docs/census.txt) — resource-type census of all four
   retail containers.

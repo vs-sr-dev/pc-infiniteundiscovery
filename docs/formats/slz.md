@@ -21,10 +21,13 @@ beside `SLZ` since 2003 without ever being explained, is not a codec but an
 encryption envelope around all four —
 [§2b-4](#2b-4-what-sle-is).
 
-**And it left the studio.** Eternal Sonata, by tri-Crescendo on the Xbox 360 in
-2007, compresses every file it ships with the same algorithm, the same framing
-and the same method numbering, differing by **one swapped nibble** —
-[§2d](#2d-the-tri-crescendo-variant).
+**And a neighbouring studio did something very similar.** Eternal Sonata, by
+tri-Crescendo on the Xbox 360 in 2007, compresses every file it ships with an
+LZSS of the same family, the same framing and the same method numbering — but
+its LZSS is the stock Okumura routine and tri-Ace's is the one that departs
+from it, so the resemblance is smaller than it first looked. The comparison is
+[§2d](#2d-the-tri-crescendo-comparison); the format itself is
+[vmtoc.md](vmtoc.md).
 
 Most of Infinite Undiscovery's bulk is compressed. Every `MESH`, `MTEX`,
 `SCE-`, `SKAC` and `APAC` resource sits behind a header whose first three bytes
@@ -507,14 +510,16 @@ undecodable when that count was taken. Those blocks open now, so the header
 *can* be checked, and checking it is the outstanding half of
 [question 24](../../TODO.md).
 
-## 2d. The tri-Crescendo variant
+## 2d. The tri-Crescendo comparison
 
 *Eternal Sonata* (Xbox 360, 2007) is not a tri-Ace game. It is tri-Crescendo,
 the studio founded by people who left tri-Ace, and it has no `SLZ` block, no
 `Aska`, no engine namespace and no container — every asset is an ordinary file
 in an ordinary directory tree, indexed by a table called `index.vmtoc`.
 
-What it does have is this codec.
+What it has instead is **its own compression, of the same family**, and the two
+are worth putting side by side. The full specification of tri-Crescendo's is
+[vmtoc.md](vmtoc.md); this section is only the comparison.
 
 ### The differences, in full
 
@@ -522,35 +527,28 @@ What it does have is this codec.
 | --- | --- | --- |
 | framing | flag byte, 8 tokens, bit 0 first, literal on 1 | **identical** |
 | back-reference | two bytes, `a` then `b` | **identical** |
-| distance | <code>a &#124; ((b & 0x0F) << 8)</code> | <code>a &#124; ((b >> 4) << 8)</code> |
+| what the 12-bit field means | a **distance**, counted back from the end of the output | an **absolute position** in a 4 096-byte ring buffer |
+| the field | <code>a &#124; ((b & 0x0F) << 8)</code> | <code>a &#124; ((b >> 4) << 8)</code> |
 | length | `(b >> 4) + 3` | `(b & 0x0F) + 3` |
-| distance range | 1 – 4 095 | **identical** |
 | length range | 3 – 18 | **identical** |
+| window | sliding | ring, zero-filled, write position starting at `0xFEE` |
 | where the stream lives | inside an `SLZ` block | the whole file, from byte 0 |
 | where the sizes live | the `SLZ` header | `index.vmtoc`, one 48-byte record per file |
+| what the method byte is | a codec selector, 0..3 | **two flag bits**: LZSS, and a range coder |
 
-**The two nibbles of the second byte are swapped, and nothing else is
-different.** `unpack_lz77(src, want, swap_nibbles=True)` in `slz.py` reads it.
+Two differences, then, not one — and the second is the one that matters.
+tri-Crescendo's is **Okumura's `lzss.c`** unchanged: `N = 4096`, `F = 18`,
+`THRESHOLD = 2`, `r = N - F = 0xFEE`, the token split exactly as published.
+tri-Ace's is that routine's field layout with the nibbles the other way round
+and a true sliding window in place of the ring.
 
-### The measurement
+So the resemblance is real but it is mostly the resemblance of **both** to the
+most widely copied LZSS in existence, and tri-Ace's is the one that departs
+from it. That is a weaker statement than this section used to make, and
+[§2d-1](#2d-1-what-the-first-reading-got-wrong-and-why-its-tests-could-not-tell)
+is why it changed.
 
-The oracle is the same one that fixed tri-Ace's fields: the output must land on
-exactly the size the index states **and** consume the input to its last byte,
-on every file at once. Twelve ways of splitting the two bytes into a distance
-and a length, four length biases, both bit orders, both flag polarities, and a
-sliding window against a ring buffer at three start positions were tried — 768
-candidates. One passes:
-
-| | |
-| --- | --- |
-| method-1 files decoding to exactly the stated size | **8 of 8** |
-| input consumed to the final byte | **8 of 8** |
-| decompressed files that restate their own size at `+0x0C` | 7 of 8 |
-
-The eighth carries a magic instead: `op.bmd` comes out as `BMD ` with `0x1DCF`
-= 7 631 at `+0x04`, exactly its own length.
-
-### And the method byte came with it
+### The method byte, which is the part that does not dissolve
 
 `index.vmtoc` holds, per file, the uncompressed size, a Unix timestamp and a
 **method byte** taking the values 0, 1, 2 and 3 — where **0 means stored, on
@@ -558,42 +556,80 @@ The eighth carries a magic instead: `op.bmd` comes out as `BMD ` with `0x1DCF`
 byte at `+0x03`, with the same range and the same meaning, moved from a block
 header into a per-file table.
 
-Methods 2 and 3 do not open. tri-Ace's now do, and tri-Crescendo's were
-re-tested against them in both nibble orders in session 17: the run escape and
-the halfword widening are both absent here, so **the two studios share method 1
-and nothing above it.** The local negative is provable rather than merely
-reported: `btldata/voice/bos01.csf` is method 3
-and must decompress to `CSF `, so its first output byte is `C`; its first byte
-on disc has bit 0 clear, which under this framing makes the first token a
-back-reference at output position zero. Method 3 is not this family.
+The meanings above 0 differ, though, and knowing that sharpens the comparison
+rather than blunting it. tri-Ace's 1, 2 and 3 select **three settings of one
+LZ77**. tri-Crescendo's 1, 2 and 3 are **two independent flags** — bit 0 for
+the LZSS layer, bit 1 for a range coder — so its method 3 is its method 1
+running on top of its method 2. Same encoding of the same decision, arrived at
+differently.
 
-### The check that settles it
+That also explains, in retrospect, a negative this file used to report as a
+puzzle. `btldata/voice/bos01.csf` is method 3 and must decompress to `CSF `, so
+its first output byte is `C`; its first byte on disc has bit 0 clear, which
+under byte-flag framing would put a back-reference at output position zero.
+Correct, and the reason is that on method 3 the bytes on disc are not the LZSS
+stream at all — they are the arithmetic stream the LZSS layer reads *through*.
 
-Output length is a weak test on its own — a wrong length field can still land
-on the right total. This one is not. Five of the seven `.e` files put a **Unix
-timestamp at `+0x04` of their decompressed data**, and it is the same timestamp
-`index.vmtoc` records for that file, **to the second**:
+## 2d-1. What the first reading got wrong, and why its tests could not tell
 
-```
-btldata/script/ai/default.e     index 2007-02-15T09:19:15   inside 2007-02-15T09:19:15
-btldata/script/ai/bos03_v1.e    index 2007-02-15T09:19:17   inside 2007-02-15T09:19:17
-btldata/script/ai/bos07_v1.e    index 2007-02-15T09:19:19   inside 2007-02-15T09:19:19
-btldata/script/ai/bos03_v2.e    index 2007-02-15T09:19:22   inside 2007-02-15T09:19:22
-btldata/script/ai/bos07_v2.e    index 2007-02-15T09:19:24   inside 2007-02-15T09:19:24
-```
+The 2007 files were first read here with tri-Ace's sliding-window decoder and
+the two nibbles swapped, and reported as 8 of 8 successes. The framing,
+polarity, bit order and length field were all right. **The match target was
+not**: the field is a ring position, and reading it as a back-distance puts
+every copy in the wrong place.
 
-The other two agree except for a constant offset of **exactly 80 seconds** in
-both, which reads as a later build step stamping the index rather than a decode
-error. A wrong decompression does not produce a 32-bit value that matches an
-independent table to the second, five times.
+The oracle used was: the output lands on exactly the size the index states, and
+the input is consumed to its last byte, on every file at once. Both halves are
+**blind to where a match copies from** — a match of the right length consumes
+two input bytes and produces the right number of output bytes wherever it
+points. Two extra checks were run at the time and both are real, but both sit
+too early in the file to help:
 
-### What to make of it
+| Check | Where it reads | Diverges after |
+| --- | --- | --- |
+| a Unix timestamp matching `index.vmtoc` to the second, on 5 files | `+0x04` | — |
+| the file restating its own length, on 7 of 8 | `+0x0C` | — |
+| the two readings first disagreeing | | **byte 27 to 53** |
 
-Two studios do not independently choose the same flag direction, the same
-polarity, the same two-byte reference, the same 12/4 split and the same bias of
-three, and then differ only in which nibble is which. What is harder to explain
-away than the codec is the **method byte beside it** — 0 to 3, 0 meaning stored
-— which is a design decision rather than a common implementation.
+Every one of those checks lands inside the prefix where the two decodings are
+identical, because that prefix is all literals. Both readings reproduce the
+timestamps and the self-lengths; neither fact separates them.
+
+Content past the first match does. `op.bmd` under the ring reading resolves
+into 16-byte records with ascending offsets —
+
+    00 00 02 88 | 00 00 00 05 | ff ff d8 f0 | ff ff d8 f0
+    00 00 02 b8 | 00 00 00 05 | ff ff d8 f0 | ff ff d8 f0
+    00 00 02 e4 | 00 00 00 05 | ff ff d8 f0 | ff ff d8 f0
+
+— and under the window reading the same bytes interleave into nothing.
+
+**The same test was then run in the other direction**, because a correction
+that only goes one way is half a measurement, and it confirms tri-Ace really
+does use a sliding window. Over 40 Star Ocean 3 method-1 blocks:
+
+| | window | ring |
+| --- | ---: | ---: |
+| occurrences of `Bip01`, the 3ds Max biped prefix | **1 356** | 63 |
+
+and only the window reading reconstructs the header word at `+0x0C` as a second
+offset just past the first (`0x0F30` against `0x0F20`) rather than as `0x30`.
+
+The general lesson is the one session 17 recorded from the other side. **A test
+that counts bytes cannot check where bytes came from.** Sizes and input
+consumption pin the framing and the length field, and they pin them well —
+that is how tri-Ace's method 1 was found in the first place. Only a
+known-plaintext or structural check reaches the distance field, and tri-Ace's
+distance field was fixed that way. tri-Crescendo's was not.
+
+### What to make of it, now
+
+Both of tri-Crescendo's layers are well-known public routines: Okumura's LZSS
+over Dmitry Subbotin's carryless range coder. Two teams reaching for those
+independently is ordinary and says little. What is still not ordinary is the
+**convention** — a method code of 0 to 3 with 0 meaning stored, and
+four-character space-padded big-endian magics with the size behind them, and a
+chunk tree inside `CSF ` that is `ASF `'s shape with different tags.
 
 The full argument, and the layers that did *not* travel, are in
 [aska-across-titles.md §13](../aska-across-titles.md#13-eternal-sonata--what-an-offshoot-studio-took-with-it).

@@ -281,12 +281,20 @@ PS_LZ77_WIDE = 3
 def unpack_lz77(src, want, swap_nibbles=False):
     """Method 1: LZ77 with byte-wide flags. Returns (output, bytes consumed).
 
-    `swap_nibbles` selects the **tri-Crescendo** variant. Eternal Sonata
-    (Xbox 360, 2007) compresses every shipped file with the same algorithm,
-    the same framing and the same bias of three, and swaps the two nibbles of
-    the second byte of a back-reference: the length is the low nibble and the
-    top of the distance is the high one. Nothing else differs. See
-    [docs/formats/slz.md](../docs/formats/slz.md#2d-the-tri-crescendo-variant).
+    `swap_nibbles` is kept for the record and **should not be used to decode
+    anything**. It was written as a reader for Eternal Sonata, on the belief
+    that tri-Crescendo shipped this codec with the two nibbles of the second
+    byte exchanged and nothing else changed. The framing was right and the
+    match target was not: that title's 12-bit field is an absolute position in
+    a 4 096-byte ring buffer, not a distance back from the end of the output,
+    so every copy lands in the wrong place after the first match. The tests
+    that accepted it -- output size, and input consumed -- cannot see a wrong
+    match target, and the two extra checks that could have are both inside the
+    literal prefix where the two readings agree.
+
+    Use `tools/vmtoc.py` for that title. See
+    [docs/formats/slz.md](../docs/formats/slz.md#2d-1-what-the-first-reading-got-wrong-and-why-its-tests-could-not-tell)
+    and [docs/formats/vmtoc.md](../docs/formats/vmtoc.md).
     """
     out = bytearray()
     i = 0

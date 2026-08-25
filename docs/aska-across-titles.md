@@ -67,7 +67,7 @@ means the tools in this repository actually parsed the title's own data.
 | Phantasy Star Nova, Vita 2014 | not reachable | `disc1/fNNNNN.bin`, CRI `CPK` | no, second layer | the naming, and only that |
 | Star Ocean 5, PS3 2016 | not reachable | `SLZ`, ASF/AAF/ACF/AIF magics, `AHSL` | no, envelope changed | `SLZ` walking exactly |
 | Star Ocean: Anamnesis, Android 2016 | **46 507 mangled `Aska`** | `aska0000.bin`, `AHSL`, reversed AIF | one texture header | the namespace, overwhelmingly |
-| *Eternal Sonata*, X360 2007 — tri-Crescendo | no, and no RTTI | **the method-1 codec, one nibble apart; the method byte; the magic style** | `slz.py`, method 1 | 8 of 8 files decoding exactly |
+| *Eternal Sonata*, X360 2007 — tri-Crescendo | no, and no RTTI | **the method byte and the magic style** — the codec turned out to be two public routines, not tri-Ace's | `vmtoc.py`, all four methods | the whole index decoding exactly |
 
 Three threads run the whole length of it:
 
@@ -698,13 +698,16 @@ It grew by someone adding a `u16` variant of the one that was already there —
 which fits a PlayStation 2 arriving with wider memory paths, and fits the
 studio's habits everywhere else in this document.
 
-That also settles what the codec set is *not*. tri-Crescendo's method 2 in
-Eternal Sonata was tested against tri-Ace's, in both nibble orders, and reaches
-the stated size on only one file of four while consuming a third of the input:
-the two studios share method **1** and nothing above it. Star Ocean 5's
-PlayStation 3 methods 2 and 3 were tested the same way against 400 blocks and
-decode none of them, which was already true of its method 1. Same numbering,
-same meaning for 0, different codecs behind 1, 2 and 3.
+That also settles what the codec set is *not*. tri-Crescendo's methods in
+Eternal Sonata were tested against tri-Ace's, in both nibble orders, and reach
+the stated size on only one file of four while consuming a third of the input.
+Session 18 then read them properly and the answer is that **nothing above the
+method byte is shared**: that title runs Okumura's stock LZSS over Subbotin's
+range coder, and its 1, 2 and 3 are flag bits rather than codec numbers —
+[vmtoc.md](formats/vmtoc.md). Star Ocean 5's PlayStation 3 methods 2 and 3 were
+tested the same way against 400 blocks and decode none of them, which was
+already true of its method 1. Same numbering, same meaning for 0, different
+things entirely behind 1, 2 and 3.
 
 ### And `SLE` is not a codec at all
 
@@ -916,14 +919,13 @@ positive.
 
 ### What is there
 
-**The codec.** Every shipped file is compressed, and the eight files the index
-marks method 1 decode with tri-Ace's method 1 — after swapping the two nibbles
-of the second byte of a back-reference, and changing nothing else. Same flag
-byte, same bit direction, same polarity, same two-byte reference, same 12/4
-split, same bias of three, same 4 095-byte window.
-[slz.md §2d](formats/slz.md#2d-the-tri-crescendo-variant) has the full
-comparison and the 768-candidate search that found it. **8 of 8 files land on
-exactly the size the index states and consume the input to its last byte.**
+**The codec.** Every shipped file is compressed, and **all four methods now
+read** — [vmtoc.md](formats/vmtoc.md). It is not tri-Ace's, though it was
+first read that way: the LZSS layer is Okumura's stock routine over a ring
+buffer, and under it on 961 of the 1 105 files sits Subbotin's carryless range
+coder with a static order-0 model shipped in the first 256 bytes of each file.
+The method byte selects the two layers independently, so method 3 is method 1
+on top of method 2.
 
 **The method byte.** `index.vmtoc` is 1 105 records of 48 bytes — a path, an
 uncompressed size, a Unix timestamp, and a **method** taking 0, 1, 2 or 3,
@@ -953,26 +955,64 @@ the same search.
 
 ### The reading, and what would overturn it
 
-Three layers, three answers:
+Three layers, three answers — and the first row is not what session 16 wrote
+there. Session 18 read tri-Crescendo's decompressor out of `default.xex`
+instead of inferring it, and the algorithm turned out to be **Okumura's
+`lzss.c`**: `N = 4096`, `F = 18`, `THRESHOLD = 2`, ring buffer, write position
+starting at `0xFEE`, the token split exactly as published. tri-Ace's is that
+routine with the nibbles the other way round *and* a true sliding window in
+place of the ring.
 
 | Layer | Born | In Eternal Sonata? |
 | --- | --- | --- |
-| the compression algorithm and its method byte | 1998 | **yes**, one nibble apart |
+| the compression algorithm | — | **no** — both studios use the same famous public routine, and tri-Ace's is the one that modifies it |
+| the **method byte**, 0..3 with 0 meaning stored | 1998 | **yes** — though tri-Ace's 1..3 select codecs and tri-Crescendo's are two flag bits |
 | the four-character space-padded magic convention | by 2003 | **yes**, different letters |
 | the payload formats — `S?F`, `A?F` | 1999–2003 | no |
 | the container — `MRON`, `PACK` | 2005–2009 | no; there is no container |
 | the engine namespace and shader toolchain | — | no |
 
-The ordinary explanation fits: **people carried the oldest and most portable
-piece of code they had, and the habits that go with it, and built everything
-above it new.** A compression routine travels in a head or a personal library;
-a renderer does not. That the difference is a *swap* rather than a copy is
-itself informative — it reads like a reimplementation from memory or from a
-description rather than a lifted file.
+So the reading has to come down a peg, and it is worth being explicit about
+which part failed. Session 16 said the codec "travelled with the people",
+reasoning that two studios do not independently pick the same flag direction,
+the same polarity, the same two-byte reference, the same 12/4 split and the
+same bias of three. They do, if both are copying the same textbook — and both
+were. Eternal Sonata's second layer is Dmitry Subbotin's carryless range coder,
+also off the shelf. **What tri-Crescendo shipped is two public-domain routines
+composed; the only bespoke thing about it is the composition.**
 
-What would overturn it: a third studio, unconnected to either, shipping the
-same byte-flag LZ77 with a 12/4 split and a bias of three. That scheme is not
-exotic and this document should not pretend otherwise. What is hard to explain
-away is the **method byte sitting beside it** — 0 to 3 with 0 meaning stored —
-because that is a design decision rather than a common implementation, and it
-is in both.
+What survives is about **convention** rather than code:
+
+* a method code of 0 to 3 with **0 meaning stored** — a design decision rather
+  than an implementation, and in both;
+* four-character, space-padded, big-endian magics with the size behind them —
+  `CSF `, `BMD `, `BOP `, `CAMP` against `ASF `, `AIF `, `AAF `, `ACF `,
+  `AAC `;
+* `CSF `'s internal chunk tree, which is `ASF `'s shape with different tags.
+
+Habits of mind, then, rather than a carried file. That is a real finding and a
+smaller one, and it is what the measurements support. See
+[vmtoc.md](formats/vmtoc.md) for the specification and
+[slz.md §2d](formats/slz.md#2d-the-tri-crescendo-comparison) for the
+side-by-side.
+
+What would overturn even that: a third studio, unconnected to either, using a
+small method code with 0 meaning stored beside four-character space-padded
+magics. Unlike the LZSS, nobody has shown that to be a common house style — but
+nobody has looked, either.
+
+### A note on how the first reading passed
+
+Session 16's decode of these files was wrong in its match target and right in
+everything else, and its tests could not have told. Output size and input
+consumption are blind to where a match copies from, and the two content checks
+it ran — a Unix timestamp at `+0x04` matching the index to the second, and the
+file restating its own length at `+0x0C` — both sit in the literal prefix,
+before the byte (27 to 53, by file) at which the two readings first disagree.
+
+That is the same asymmetry this document already records for signature
+sweeps, one level down: **a test that counts bytes cannot check where bytes
+came from.** tri-Ace's own distance field was fixed with a known-plaintext
+search precisely because sizes could not fix it. The check has now been run in
+both directions — see
+[slz.md §2d-1](formats/slz.md#2d-1-what-the-first-reading-got-wrong-and-why-its-tests-could-not-tell).

@@ -13,6 +13,18 @@ Three layers with known birthdays after session 15: the **compression**, from
 1998; the **payload formats**, between 1999 and 2003; the **container and the
 engine name**, later still. A hit dated to one of them says when.
 
+> **Corrected by [session 18](session-18.md).** Two things below did not
+> survive being checked against the executable. The method-1 decode is wrong
+> in its match target — tri-Crescendo's 12-bit field is an absolute ring
+> position, not a back-distance — and the tests in §4 could not have caught
+> that, because output size and input consumption are blind to where a match
+> copies from and both content checks sit in the literal prefix. And the
+> codec turns out to be **Okumura's `lzss.c`** over **Subbotin's range
+> coder**, both stock, so the headline below — that the oldest layer
+> travelled with the people — does not follow. What travelled is the
+> convention. The rest of this log stands, including the index, the method
+> byte, the magic style and the timestamp check.
+
 ## Outcome
 
 **The compression, and the conventions around it. Not the engine.**
