@@ -115,7 +115,7 @@ visible immediately: `FAS\0`, `RTA\0`, `LCTP`, `DMM\0` and, in one block,
 are known is a known-plaintext attack waiting to happen.
 
 The full specification and the three separate measurements that fix its three
-fields are in [formats/slz.md §2b](../formats/slz.md#2b-the-playstation-2-codec-method-1).
+fields are in [formats/slz.md §2b](../formats/slz.md#2b-the-playstation-codec-method-1).
 In one line: **LZ77, byte-wide flags read from bit 0 up, literals on 1, a
 two-byte back-reference with a 12-bit distance and a 4-bit length biased by 3.**
 
@@ -159,7 +159,7 @@ here; it is recorded because a library version string is a dateable artefact.
 ## 4. What that unlocked, which is not about the PlayStation 2
 
 The payload census is in
-[formats/slz.md §2c](../formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets).
+[formats/slz.md §2c](../formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not).
 Three rows of it reach back into open questions about the Xbox 360 disc:
 
 * **`DTT\0`** is a stored payload on Valkyrie Profile 2. It is byte for byte

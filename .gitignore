@@ -17,6 +17,7 @@
 *.gbc
 *.3ds
 *.cpk
+*.cue
 iso/
 
 # Anything extracted from a disc

@@ -25,8 +25,16 @@ Undiscovery's opcodes.
 Session 14 added two more titles and, unplanned, **read one of the PlayStation
 2 compression codecs**, which turned three discs from a census into a reading.
 That moved questions 22 and 24 and gave questions 3, 12 and 25 an older
-specimen each. The best remaining lead on that front is question 22's second
-half: methods 2 and 3, which hold most of all three PlayStation 2 discs.
+specimen each.
+
+Session 15 took the same codec back to tri-Ace's first two 32-bit games and it
+worked unchanged: **`SLZ` is from 1998, not 2003**, and on those two discs it
+wraps MIPS overlays and Sony `TIM` textures rather than any format of the
+studio's own. So the wrapper is older than everything it later carries. It also
+found that **`SLE` is not there in 1998 or 1999**, which is question 28. The
+best remaining lead on this front is question 22's second half: **method 2**,
+which is on every PlayStation and PlayStation 2 disc from 1998 on and has never
+opened.
 
 ## Now the main line of work
 
@@ -159,12 +167,14 @@ stored vertices are not in.
 
 ## Beyond this game — answered, and what it left open
 
-**Ten titles were tested and seven of them are the same engine**, with the
+**Twelve titles were tested and nine of them are the same engine**, with the
 argument and every measurement in
 [docs/aska-across-titles.md](docs/aska-across-titles.md):
 
 | | |
 | --- | --- |
+| SO: The Second Story, PS1 1998 | `SLZ` in the executable, 10 377 sound blocks, 283 of them decoded — and no tri-Ace format inside any of them |
+| Valkyrie Profile, PS1 1999 | `SLZ` in the executable, 12 395 sound blocks, 1 174 decoded, Sony `TIM` inside |
 | Star Ocean: Blue Sphere, GBC 2001 | **no** — not one hit of any signature, the only empty table so far |
 | Star Ocean 3, PS2 2003 | `SLZ`/`SLE` in the executable, 1 566 sound blocks, and 152 of them decoded |
 | Radiata Stories, PS2 2005 | 26 254 sound `SLZ` blocks |
@@ -176,11 +186,17 @@ argument and every measurement in
 | Beyond the Labyrinth, 3DS 2012 | **no** — nothing above chance, Nintendo's asset formats, no engine name |
 | Phantasy Star Nova, Vita 2014 | unanswerable — the naming convention matches, the payloads are behind a second encryption layer |
 
-The single most durable thing found is **`SLZ`**: present from **2003** to
-2016 across three CPUs, in three header revisions. The 2005 disc is what
+The single most durable thing found is **`SLZ`**: present from **1998** to
+2016 across three CPUs, in three header revisions, the first of which covers
+five discs and eight years without a field moving. The 2005 disc is what
 identifies the byte at `+0x03` as a compression method rather than a version,
-which one specimen alone could not settle; the 2003 disc is what dates the
-wrapper, and one of its three codecs now decodes.
+which one specimen alone could not settle; the 1998 disc is what dates the
+wrapper, and one of its codecs decodes unchanged across all eight of those
+years.
+
+The 1998 disc also settles the **order of the parts**, which no later specimen
+could: it carries the wrapper and nothing else of tri-Ace's, so the payload
+formats, the container and the name are all younger than the compression.
 
 The questions that came out of it, none of which is about this disc:
 
@@ -189,17 +205,26 @@ The questions that came out of it, none of which is about this disc:
     `0x10`. Something sits between the magic and the chunks, and 58 of 613
     sampled headers carry the tag `PS3 `.
 
-22. **The codecs behind `SLZ` on PlayStation 2 and PlayStation 3.** Half
-    answered. **PlayStation 2 method 1 is solved** — tri-Ace's own LZ77,
-    specified in [docs/formats/slz.md §2b](docs/formats/slz.md#2b-the-playstation-2-codec-method-1),
-    decoding 152 of 152 blocks on the 2003 disc and 153 of 153 on the 2006 one.
-    **Methods 2 and 3 are not**, and they are 1 987 of the 2 139 blocks
-    sampled, so most of all three discs is still shut. Neither is method 1
-    under another number. The way in is probably the MIPS decompressor in
-    `SLES_820.28`, which is 751 KB and disassemblable. The **PlayStation 3**
-    methods are separately open: same numbering, same stored method 0, and
-    method 1 there is not this method 1 — tried against Star Ocean 5's blocks
-    it decodes none.
+22. **The codecs behind `SLZ` on PlayStation and PlayStation 3.** Half
+    answered. **Method 1 is solved** — tri-Ace's own LZ77, specified in
+    [docs/formats/slz.md §2b](docs/formats/slz.md#2b-the-playstation-codec-method-1),
+    decoding **1 762 of 1 762** sampled blocks across four titles from 1998 to
+    2006 with no failures and no change to the specification.
+
+    **Method 2 is not, and it is the prize.** It is on every one of the five
+    PlayStation and PlayStation 2 discs — 2 303 of 2 546 blocks on the 1998
+    disc alone — and it has never decoded. It is not method 1 under another
+    number. The best haystack is the smallest: Star Ocean 2's `SCUS_944.21` is
+    128 KB of MIPS with the `SLZ` string sitting directly on top of its own
+    function-pointer table, against Star Ocean 3's 751 KB.
+
+    **Method 3 is separately open, and separately interesting**: it does not
+    exist on either PlayStation disc and is the default on all three
+    PlayStation 2 ones, so the codec set grew between 1999 and 2003.
+
+    The **PlayStation 3** methods are open too: same numbering, same stored
+    method 0, and method 1 there is not this method 1 — tried against Star
+    Ocean 5's blocks it decodes none.
 
 23. **Resonance of Fate's container.** The executable proves the engine and its
     audio containers are on the disc, but its scenes, models and animations are
@@ -208,7 +233,7 @@ The questions that came out of it, none of which is about this disc:
 
 24. **What the PlayStation 2 titles call their assets.** *Answered for what
     method 1 holds*, in
-    [docs/formats/slz.md §2c](docs/formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets):
+    [docs/formats/slz.md §2c](docs/formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not):
     `SAF`, `ATR`, `SPF`, `PTCL`, `MMD`, `CAMR`, `TTD`, and `PACK` as a tag six
     years before Star Ocean 4. What is left is a **reader** rather than a
     decompressor. `SAF` and `ATR` are the two commonest payloads on all three
@@ -232,6 +257,18 @@ The questions that came out of it, none of which is about this disc:
 27. **Beyond the Labyrinth's `P@CK` and `mpak`.** One bit from Star Ocean 4's
     `PACK`, with the same header shape and different records, holding blocks
     that are not `SLZ`.
+
+28. **Where `SLE` starts.** `SLZ` and `SLE` sit together in every executable
+    from 2003 to 2010. `SLE` is in neither PlayStation executable and nowhere
+    on either PlayStation disc — zero hits on Star Ocean 2, two on Valkyrie
+    Profile and both false. So it arrives between 1999 and 2003, and the
+    tri-Ace PlayStation 2 titles in that gap are where to look. What `SLE`
+    *is* has never been established either; it has only ever been seen as a
+    string beside `SLZ`.
+
+29. **The offset-table archive inside the PlayStation blocks.** A run of `u32`
+    offsets whose first entry is the size of the table itself — the same
+    self-check `PACK` passes eleven years later. It was seen and not measured.
 
 Two notes for anyone extending this further. The **tests are asymmetric**: a
 hit on a versioned magic or the engine namespace is conclusive, a miss proves

@@ -9,11 +9,14 @@ the engine namespace is conclusive, a miss proves very little — and that the
 platform layer is expected to differ on anything that is not an Xbox 360.
 
 Three specimens to begin with, chosen to hold the platform constant and vary
-the year, plus one that varies the platform while staying big-endian. Seven
-more arrived afterwards, and the list now spans fifteen years and six consoles:
+the year, plus one that varies the platform while staying big-endian. Nine more
+arrived afterwards, and the list now spans eighteen years and seven consoles,
+from tri-Ace's second game to their most recent one measured here:
 
 | Title | Year | Platform | Build |
 | --- | --- | --- | --- |
+| Star Ocean: The Second Story | 1998 | PlayStation | `SCUS_944.21`, USA, disc 1 |
+| Valkyrie Profile | 1999 | PlayStation | `SLUS_011.56`, USA, disc 1 |
 | Star Ocean: Blue Sphere | 2001 | Game Boy Color | `STAROCEANGBBO2J`, Japan |
 | Star Ocean: Till the End of Time | 2003 | PlayStation 2 | `SLES_820.28`, PAL, disc 1 |
 | Radiata Stories | 2005 | PlayStation 2 | `SLUS_212.62`, USA |
@@ -26,10 +29,12 @@ more arrived afterwards, and the list now spans fifteen years and six consoles:
 | Beyond the Labyrinth | 2012 | Nintendo 3DS | `CTR-P-ALVJ`, Japan |
 | Phantasy Star Nova | 2014 | PlayStation Vita | `PCSG00351`, Japan, SEGA-published |
 
-**The answer is yes for seven of the ten, no for two, and unanswerable for
-one.** What differs between the seven is not whether it is the same engine but
+**The answer is yes for nine of the twelve, no for two, and unanswerable for
+one.** What differs between the nine is not whether it is the same engine but
 how much of it is *readable*, and that turns out to be a different question
-with a different answer every time.
+with a different answer every time. The oldest two are a special case worth
+naming up front: they carry the wrapper and **nothing** it later wraps, which
+is what dates the parts relative to each other.
 
 ## 1. The short version
 
@@ -38,6 +43,8 @@ means the tools in this repository actually parsed the title's own data.
 
 | Title | Engine named | Formats shared | Readers open it | Settled by |
 | --- | --- | --- | --- | --- |
+| SO: The Second Story, PS1 1998 | no | `SLZ` and nothing else | `slz.py`, method 1 | `SLZ` in the executable, 10 377 sound blocks |
+| Valkyrie Profile, PS1 1999 | no | `SLZ` and nothing else | `slz.py`, method 1 | `SLZ` in the executable, 12 395 sound blocks |
 | Blue Sphere, GBC 2001 | no | none | no | **nothing at all — not one hit** |
 | Star Ocean 3, PS2 2003 | no | `SLZ`, and `PACK` as a tag | `slz.py`, method 1 | `SLZ`/`SLE` in the executable, 1 566 sound blocks |
 | Radiata Stories, PS2 2005 | no | `SLZ` only | stored blocks only | 26 254 sound `SLZ` blocks |
@@ -52,11 +59,14 @@ means the tools in this repository actually parsed the title's own data.
 
 Three threads run the whole length of it:
 
-* **`SLZ`** is in every title from **2003** to 2016 that this repository could
+* **`SLZ`** is in every title from **1998** to 2016 that this repository could
   look inside, in three header revisions that differ by one inserted word and
-  one moved constant. Session 14 read one of its PlayStation 2 codecs, so the
-  oldest thread is now also a readable one — see
-  [§11](#11-the-playstation-2-trio-2003-2005-and-2006).
+  one moved constant — and the first of those three revisions covers five discs
+  and eight years without a field moving. Its method-1 codec is readable and
+  identical across all of them. See
+  [§11](#11-the-five-playstation-discs-1998-to-2006).
+  **`SLE`, which always travels beside it from 2003 on, is not there in 1998 or
+  1999**, so the pair has two birthdays.
 * **`AHSL`**, the shader toolchain, is in both Xbox 360 executables, in 30
   shipped files on the PlayStation 3 and 147 times in the Android library.
 * **The art naming** — `cNNN_NN_partM`, `pCol` primitives, Maya light names —
@@ -203,24 +213,24 @@ Where a signature has a structural test, the second number is the **sound**
 count, and it is the only one worth reading: a bare four-byte magic turns up by
 chance about once per four gigabytes, and every image here is bigger than that.
 
-| Signature | Star Ocean 3 2003 | Radiata 2005 | Valkyrie Profile 2 2006 | Infinite Undiscovery 2008 | Star Ocean 4 2009 | Resonance of Fate 2010 | Star Ocean 5 2016 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| MRON container | — | — | — | **6 873** / 6 261 | — | — | — |
-| SNC scene script | — | — | — | 7 | — | — | — |
-| AREA | — | — | — | 94 | — | — | — |
-| MINI | — | — | — | 44 | — | — | — |
-| SIG- signal | — | — | — | 2 909 | — | — | — |
-| ASF scene | 1 / 0 | — | — | 1 454 / **1 450** | 2 / 1 | 1 / 0 | 1 887 / **1 886** |
-| AAF animation | 1 | 8 | 12 | **6 763** | 305 | 2 | **5 553** |
-| ACF collision | 1 | — | — | **1 314** | 769 | 2 | 683 |
-| AIF image | 1 / 1 | — | — | 3 321 / **3 320** | 85 / 84 | 3 / 0 | 3 947 / **3 740** |
-| AAC audio | 3 / 0 | — | 3 / 0 | 9 080 / **708** | 11 681 / **6 379** | 185 / **182** | 22 / 0 |
-| SLZ wrapper | 55 653 / **53 201** | 26 275 / **26 254** | 25 531 / **25 431** | 8 104 / **8 082** | 26 531 / **26 498** | 21 / 0 | 19 583 / **10 155** |
-| AI node field | — | — | — | 33 / **33** | 1 / 0 | 1 / 0 | 5 / 0 |
-| `R:M:` node prefix | — | 100 † | 37 † | **877 637** | 1 | 1 | 1 |
-| pCol primitives | — | — | — | **10 357** | **747** | — | **163** |
-| `Tri_ace` node | — | — | — | 1 | — | — | — |
-| AHSL | — | 1 † | 7 † | — | — | 4 | 30 |
+| Signature | SO2 1998 | VP1 1999 | Star Ocean 3 2003 | Radiata 2005 | Valkyrie Profile 2 2006 | Infinite Undiscovery 2008 | Star Ocean 4 2009 | Resonance of Fate 2010 | Star Ocean 5 2016 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MRON container | — | — | — | — | — | **6 873** / 6 261 | — | — | — |
+| SNC scene script | — | — | — | — | — | 7 | — | — | — |
+| AREA | — | — | — | — | — | 94 | — | — | — |
+| MINI | — | — | — | — | — | 44 | — | — | — |
+| SIG- signal | — | — | — | — | — | 2 909 | — | — | — |
+| ASF scene | — | — | 1 / 0 | — | — | 1 454 / **1 450** | 2 / 1 | 1 / 0 | 1 887 / **1 886** |
+| AAF animation | — | 8 | 1 | 8 | 12 | **6 763** | 305 | 2 | **5 553** |
+| ACF collision | — | — | 1 | — | — | **1 314** | 769 | 2 | 683 |
+| AIF image | — | — | 1 / 1 | — | — | 3 321 / **3 320** | 85 / 84 | 3 / 0 | 3 947 / **3 740** |
+| AAC audio | 1 / 0 | 1 / 0 | 3 / 0 | — | 3 / 0 | 9 080 / **708** | 11 681 / **6 379** | 185 / **182** | 22 / 0 |
+| SLZ wrapper | 15 708 / **10 377** | 13 775 / **12 395** | 55 653 / **53 201** | 26 275 / **26 254** | 25 531 / **25 431** | 8 104 / **8 082** | 26 531 / **26 498** | 21 / 0 | 19 583 / **10 155** |
+| AI node field | 1 / 0 | — | — | — | — | 33 / **33** | 1 / 0 | 1 / 0 | 5 / 0 |
+| `R:M:` node prefix | — | — | — | 100 † | 37 † | **877 637** | 1 | 1 | 1 |
+| pCol primitives | — | — | — | — | — | **10 357** | **747** | — | **163** |
+| `Tri_ace` node | — | — | — | — | — | 1 | — | — | — |
+| AHSL | — | — | — | 1 † | 7 † | — | — | 4 | 30 |
 
 Dashes are counts at or below chance. Star Ocean 5's column is its decrypted
 package run, 11.2 GiB, not a disc image. Beyond the Labyrinth, Star Ocean: Blue
@@ -229,6 +239,10 @@ nothing anywhere ([§9](#9-beyond-the-labyrinth--the-first-specimen-that-says-no
 [§12](#12-star-ocean-blue-sphere--the-second-specimen-that-says-no)) and the
 third is 58 MB of APK whose evidence is in its library
 ([§8](#8-star-ocean-anamnesis-and-what-it-cost-the-tool)).
+
+**The two PlayStation columns say the whole thing in one line each**: tens of
+thousands of sound `SLZ` blocks and not a single other signature above chance,
+on discs whose decompressed contents turn out to hold no tri-Ace format at all.
 
 **Star Ocean 3's column is the most extreme in the table**: 53 201 sound `SLZ`
 blocks, more than Radiata Stories and Valkyrie Profile 2 put together, and
@@ -267,9 +281,10 @@ exists for now. Its scenes, models and animations remain invisible.
 **Star Ocean 5** carries the payload magics in quantity and big-endian, and
 they do not open — see [§2](#2-what-each-specimen-gave-up).
 
-**The PlayStation 2 trio** show `SLZ` and nothing else *to a sweep*. What is
-inside those blocks is another matter since session 14 read method 1;
-[§11](#11-the-playstation-2-trio-2003-2005-and-2006) has them.
+**The five PlayStation discs** show `SLZ` and nothing else *to a sweep*. What
+is inside those blocks is another matter since session 14 read method 1 —
+assets with names on the PlayStation 2, overlay code and Sony `TIM` on the
+PlayStation. [§11](#11-the-five-playstation-discs-1998-to-2006) has them.
 
 ## 6. The readers against Star Ocean 4
 
@@ -538,40 +553,71 @@ which is not reading a format, and this repository stops there.
 So Nova is recorded as: **same file-naming convention, same middleware, payloads
 not inspectable.**
 
-## 11. The PlayStation 2 trio: 2003, 2005 and 2006
+## 11. The five PlayStation discs, 1998 to 2006
 
-*Star Ocean: Till the End of Time* (SLES-820.28, PAL disc 1), *Radiata Stories*
-(SLUS-21262, USA) and *Valkyrie Profile 2: Silmeria* (SLES-54647, PAL) sit
-five, three and two years in front of Infinite Undiscovery, on a little-endian
-MIPS console. They are the specimens that explain a field the later ones made
-unreadable — and, since session 14, the only ones outside the Xbox 360 whose
-compressed data this repository can actually open.
+Five titles on two little-endian MIPS consoles, spanning eight years in front
+of Infinite Undiscovery:
 
-All three discs are built the same way: an ISO 9660 filesystem holding three
-files — the executable, Sony's `IOPRP*.IMG` and `SYSTEM.CNF` — and four
-gigabytes of data in raw sectors outside it, addressed by LBA. Star Ocean 3
-establishes that layout in 2003.
+| | Build | |
+| --- | --- | --- |
+| *Star Ocean: The Second Story* | `SCUS_944.21`, USA disc 1 | PlayStation, 1998 |
+| *Valkyrie Profile* | `SLUS_011.56`, USA disc 1 | PlayStation, 1999 |
+| *Star Ocean: Till the End of Time* | `SLES_820.28`, PAL disc 1 | PlayStation 2, 2003 |
+| *Radiata Stories* | `SLUS_212.62`, USA | PlayStation 2, 2005 |
+| *Valkyrie Profile 2: Silmeria* | `SLES_546.47`, PAL | PlayStation 2, 2006 |
 
-### `SLZ` is theirs already, and earlier than was thought
+They are the specimens that explain a field the later ones made unreadable,
+they are the only ones outside the Xbox 360 whose compressed data this
+repository can open, and — the oldest two — they are what dates the parts of
+the engine relative to each other.
 
-| | Star Ocean 3 | Radiata Stories | Valkyrie Profile 2 |
-| --- | ---: | ---: | ---: |
-| `SLZ` magics, sampled | 1 641 | 26 275 | 25 531 |
-| of those, sound | **1 566** | **26 254** | **25 431** |
-| consecutive blocks landing on the next | **695 / 727** | — | — |
-| everything else | chance | chance | chance |
+**The disc layout is one idea, twice.** The PlayStation discs are an ISO 9660
+filesystem holding three entries, of which one is everything: an executable,
+`SYSTEM.CNF`, and a single `.BIN` of 0.48 or 0.64 GB. The PlayStation 2 discs
+are an ISO 9660 filesystem holding three files — the executable, Sony's
+`IOPRP*.IMG` and `SYSTEM.CNF` — with four gigabytes in raw sectors *outside*
+the filesystem, addressed by LBA. The blob moved out of the filesystem; it did
+not otherwise change.
 
-The name is in the executables too, and in the same shape in all three: `SLZ`
-and `SLE` as adjacent eight-byte-aligned constants, twice per binary. Star
-Ocean 3 puts them at `0x4DD40` and `0x4DE30`. The three Xbox 360 titles carry
+### `SLZ` is theirs from the beginning
+
+| | SO2 1998 | VP1 1999 | Star Ocean 3 | Radiata | Valkyrie Profile 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `SLZ` magics | 15 708 | 13 775 | 1 641 † | 26 275 | 25 531 |
+| of those, sound | **10 377** | **12 395** | **1 566** † | **26 254** | **25 431** |
+| consecutive blocks landing on the next | 261 / 957 | 410 / 698 | **695 / 727** | — | — |
+| everything else | chance | chance | chance | chance | chance |
+
+† Star Ocean 3's figures are a 128 MiB sample; over the whole image it is
+55 653 magics and **53 201** sound, the largest count in this document.
+
+The name is in the executables too. Star Ocean 2 puts `SLZ\0`, padded into an
+eight-byte slot, at `0x1B060` and `0x1B30C`, each followed by a table of
+`0x8001xxxx` function pointers; Valkyrie Profile puts it at `0x1B0D0` and
+`0x1B37C`, within `0x70` bytes of the same places, with the same table behind
+it — the same library object linked into two games a year apart. From Star
+Ocean 3 on it is `SLZ` **and `SLE`** as adjacent eight-byte-aligned constants,
+twice per binary, at `0x4DD40` and `0x4DE30`; the three Xbox 360 titles carry
 the same pair four-byte-aligned and the other way round, `SLE` then `SLZ`.
-**Six titles, three CPUs, 2003 to 2010.**
+
+**Eight titles, three CPUs, 1998 to 2010.**
+
+### `SLE` is younger than `SLZ`
+
+It is not in either PlayStation executable, and not on either PlayStation disc:
+zero occurrences of `SLE\0` across the whole of Star Ocean 2's image, and two
+across Valkyrie Profile's — both unaligned, both inside byte-identical copies
+of one blob of nibble-packed data. Checked, and false.
+
+So the pair that reads as a unit in every executable from 2003 to 2010 has two
+birthdays. `SLZ` is 1998 or earlier; `SLE` arrives between 1999 and 2003, and
+the tri-Ace PlayStation 2 titles in that gap are where to look.
 
 ### And it explains Infinite Undiscovery's fourth byte
 
-The PlayStation 2 header is shorter than the one
-[slz.md](formats/slz.md) describes, and reading it settles a question that a
-single specimen could not:
+The PlayStation header is shorter than the one [slz.md](formats/slz.md)
+describes — and it is the *same* header on all five discs, byte for byte, from
+1998 to 2006. Reading it settles a question that a single specimen could not:
 
 | | |
 | --- | --- |
@@ -602,32 +648,44 @@ stored blocks agreed. The 2005 disc settles it: 68 blocks that say 0 have their
 two sizes equal and their payload in the clear, one of them opening with
 `SEQW`. Infinite Undiscovery is the exception, not the rule.
 
-The three titles do not use the methods the same way, which is itself worth
-recording:
+The five titles do not use the methods the same way, and the shape of that
+table is a finding in itself:
 
-| Method | Star Ocean 3 | Radiata Stories | Valkyrie Profile 2 |
-| --- | ---: | ---: | ---: |
-| 0, stored | — | 14 | 2 |
-| 1, LZ77 | 152 | **none, anywhere** | 153 |
-| 2 | 482 | 2 | 390 |
-| 3 | 1 505 | 827 | 333 |
+| Method | SO2 1998 | VP1 1999 | Star Ocean 3 | Radiata | Valkyrie Profile 2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0, stored | 1 | 4 | — | 14 | 2 |
+| 1, LZ77 | 242 | 722 | 152 | **none, anywhere** | 153 |
+| 2 | 2 303 | 1 627 | 482 | 2 | 390 |
+| 3 | **none** | **none** | 1 505 | 827 | 333 |
+
+**Method 3 does not exist on the PlayStation** and is the default on all three
+PlayStation 2 discs, so the codec set grew between 1999 and 2003. **Method 2 is
+on every disc from 1998 on** and has never decoded.
 
 ### Method 1 is tri-Ace's own LZ77, and it opens
 
-Session 14 read it. The specification and the three independent measurements
-that fix its three fields are in
-[slz.md §2b](formats/slz.md#2b-the-playstation-2-codec-method-1); the short
+Session 14 read it off the 2003 disc. The specification and the three
+independent measurements that fix its three fields are in
+[slz.md §2b](formats/slz.md#2b-the-playstation-codec-method-1); the short
 version is byte-wide flags read from bit 0 up, literals on 1, and a two-byte
 back-reference carrying a 12-bit distance and a 4-bit length biased by 3.
 
-**152 of 152 blocks on the 2003 disc and 153 of 153 on the 2006 disc decode to
-exactly the size their header states, with no failures and no special cases.**
+Applied unmodified to the other four discs:
 
-### So the discs are not silent after all
+| | SO2 1998 | VP1 1999 | Star Ocean 3 2003 | Valkyrie Profile 2 2006 |
+| --- | ---: | ---: | ---: | ---: |
+| method 1 blocks sampled | 283 | 1 174 | 152 | 153 |
+| decode to exactly the stated size | **283** | **1 174** | **152** | **153** |
+| failures | 0 | 0 | 0 | 0 |
+
+**1 762 blocks over eight years and two consoles, and none fails.** Not a field
+of the specification changed between 1998 and 2006.
+
+### So the PlayStation 2 discs are not silent after all
 
 What comes out of them is a vocabulary, and it is not Infinite Undiscovery's —
 the census is in
-[slz.md §2c](formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets).
+[slz.md §2c](formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not).
 `FAS\0`, `RTA\0` and `FPS\0` are the three commonest payloads on all three
 discs. Three of the rarer ones reach back into open questions about the Xbox
 360 game: **`DTT\0`**, which is byte for byte the payload of Infinite
@@ -641,6 +699,33 @@ leading literal of roughly 190 of the 1 987 blocks sampled on the 2003 disc
 that do not yet decode. Whether the header is the same as Star Ocean 4's cannot be
 checked until methods 2 and 3 open, so what is established is the tag and not
 the container.
+
+### And the PlayStation discs have no vocabulary at all
+
+That is the other half of it, and it is what dates the engine's own formats.
+Decompress the 1998 and 1999 blocks and none of those tags is there — not as a
+payload head, not as a leading literal of an unopened block, not anywhere
+inside the decoded data. What is there instead:
+
+* **MIPS overlay code.** The commonest payload head on both discs is
+  `27 bd ff e8` and its relatives — `addiu $sp, $sp, -0x18`, a function
+  prologue. tri-Ace compressed its own executable overlays with `SLZ`.
+* **Sony `TIM` textures**, 29 of 29 sampled on Valkyrie Profile with a
+  self-consistent id word, flag word, CLUT block and image block. The console's
+  standard image format, not the studio's.
+* **Offset-table archives** — a run of `u32` offsets whose first entry is the
+  size of the table itself. That is the same self-check `PACK` passes eleven
+  years later.
+* Unlabelled binary with no magic at all.
+
+Seven `DTT\0` sequences across the two discs were checked and are false: all
+unaligned, all inside nibble-packed image data, three of them inside
+byte-identical copies of one blob.
+
+So **the wrapper is older than anything it wraps.** `SLZ` is 1998; the `S?F`
+family on the PlayStation 2 and the `A?F` family on the Xbox 360 are both
+younger than it, and the studio's own file formats appear somewhere between
+1999 and 2003.
 
 ### The pipeline was 3ds Max, not Maya
 
@@ -668,9 +753,12 @@ a digit run inside compressed data. And methods 2 and 3, which are 1 987 of the
 2 139 blocks sampled on that disc, remain closed.
 
 So the lineage the evidence supports is: **the compression wrapper is the
-oldest thing in the engine**, older than the container, older than the payload
-formats, older than the name ASKA is attached to here — and now datable to
-2003 rather than 2005. Everything else in this document is younger than it.
+oldest thing in the engine, and older than the engine** — older than the
+container, older than the payload formats, older than the name ASKA is attached
+to here, and datable to **1998**. Everything else in this document is younger
+than it, and on the two oldest discs there is demonstrably nothing else of
+tri-Ace's for it to be older *than*: it wraps the console maker's texture
+format and the game's own compiled overlays.
 
 ## 12. Star Ocean: Blue Sphere — the second specimen that says no
 

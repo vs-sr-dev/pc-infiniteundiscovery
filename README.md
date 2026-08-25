@@ -140,14 +140,14 @@ Container offsets for the European release are tabulated in
   tri-Ace's engine: 1 740 recovered class names, the renderer, the AI and
   battle architecture, the shader library.
 * [Is ASKA in tri-Ace's other titles?](docs/aska-across-titles.md) — the one
-  document here that is not about this disc. Star Ocean 4, Resonance of Fate,
-  Star Ocean 5 on PlayStation 3, Star Ocean: Anamnesis on Android, Beyond the
-  Labyrinth on the 3DS, Phantasy Star Nova on the Vita, Star Ocean: Blue Sphere
-  on the Game Boy Color, and the three PlayStation 2 titles that came before
-  this one — Star Ocean: Till the End of Time, Radiata Stories and Valkyrie
-  Profile 2 — all measured against this baseline. Seven of the ten are the same
-  engine, two are not, and one cannot be asked; `SLZ` runs through all of it
-  from 2003 to 2016, and one of its PlayStation 2 codecs now decodes.
+  document here that is not about this disc. Twelve titles measured against
+  this baseline, from Star Ocean: The Second Story on the PlayStation in 1998
+  to Star Ocean 5 and Star Ocean: Anamnesis in 2016, across seven consoles.
+  Nine of the twelve are the same engine, two are not, and one cannot be asked.
+  `SLZ` runs through all of it from **1998** to 2016 and one of its codecs
+  decodes unmodified across eight of those years — and on the two oldest discs
+  it wraps nothing of tri-Ace's at all, which dates the wrapper as older than
+  the engine's own file formats.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
@@ -157,10 +157,11 @@ Container offsets for the European release are tabulated in
 * [SLZ](docs/formats/slz.md) — the compressed-resource wrapper, which on this
   console turns out to be Microsoft XCompress. Solved: all 1 812 blocks in disc
   1's `ud1.bin` decompress, with nothing left unexplained. It is also the
-  oldest thing in the engine, on a tri-Ace disc from 2003 and still there in
-  2016, in three header revisions. The PlayStation 2 revision wraps tri-Ace's
-  own LZ77 rather than an SDK library, and one of its three codecs is
-  specified here.
+  oldest thing in the engine, on a tri-Ace disc from **1998** and still there
+  in 2016, in three header revisions — the first of which holds still for five
+  discs and eight years. The PlayStation revision wraps tri-Ace's own LZ77
+  rather than an SDK library, and that codec is specified here: 1 762 of 1 762
+  sampled blocks from 1998, 1999, 2003 and 2006 decode with no failures.
 * [AIF](docs/formats/aif.md) — the Aska Image File: every texture in the game,
   stored in the Xbox 360 GPU's own tiled layout.
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource

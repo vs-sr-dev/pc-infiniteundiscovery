@@ -14,9 +14,15 @@ This file reads two of them:
 * the **Xbox 360** wrapper, 24 bytes, around a stock Microsoft XCompress
   stream. That is what the rest of this repository uses and what the notes
   below describe.
-* the **PlayStation 2** wrapper, 16 bytes, around tri-Ace's own LZ77. Method 0
-  is stored and **method 1** is the codec cracked in session 14; methods 2 and
-  3 are not read yet. Use `slz.py scan` on a PlayStation 2 image.
+* the **PlayStation** wrapper, 16 bytes, around tri-Ace's own LZ77. It is the
+  same on the PlayStation and the PlayStation 2, unchanged from 1998 to 2006.
+  Method 0 is stored and **method 1** is the codec cracked in session 14 and
+  confirmed on 1998 data in session 15; methods 2 and 3 are not read yet. Use
+  `slz.py scan` on a PlayStation or PlayStation 2 image.
+
+  A PlayStation disc is normally a `MODE2/2352` `.bin`; `scan` wants the user
+  data, so de-sector it first — 2 048 bytes from offset 24 of each 2 352-byte
+  sector.
 
 Most of the game's bulk -- every `MESH`, `MTEX`, `SCE-`, `SKAC` and `APAC`
 resource, 1812 blocks on disc 1 alone -- is stored compressed behind a header
@@ -223,7 +229,11 @@ class SlzBlock:
 
 
 # ---------------------------------------------------------------------------
-# The PlayStation 2 wrapper, and the codec behind method 1.
+# The PlayStation wrapper, and the codec behind method 1. Both are the same on
+# the PlayStation and the PlayStation 2: Star Ocean: The Second Story (1998),
+# Valkyrie Profile (1999), Star Ocean 3 (2003), Radiata Stories (2005) and
+# Valkyrie Profile 2 (2006) write byte-for-byte the same header, and one
+# decoder reads 1 762 of 1 762 sampled method-1 blocks across four of them.
 #
 # Header, little-endian, 16 bytes:
 #
@@ -245,6 +255,9 @@ class SlzBlock:
 # Overlapping copies are ordinary and common -- a distance of 1 is how a run
 # of zeroes is written.
 #
+# Method 3 never appears on a PlayStation disc and is the default on every
+# PlayStation 2 one; method 2 is on all five and has never decoded.
+#
 # How the fields were pinned down, since none of it is guessable: the flag
 # framing comes from a block whose plaintext begins "so3mclib 1.80i", where
 # 0xFF flag bytes land on eight-literal runs three times in a row; the length
@@ -254,13 +267,13 @@ class SlzBlock:
 # composition of the two bytes and every ring-buffer start. Only one reading
 # produces it.
 
-PS2_WRAPPER_SIZE = 0x10
+PS_WRAPPER_SIZE = 0x10
 
-PS2_STORED = 0
-PS2_LZ77 = 1
+PS_STORED = 0
+PS_LZ77 = 1
 
 
-def unpack_ps2_lz77(src, want):
+def unpack_ps_lz77(src, want):
     """Method 1: LZ77 with byte-wide flags. Returns (output, bytes consumed)."""
     out = bytearray()
     i = 0
@@ -296,8 +309,8 @@ def unpack_ps2_lz77(src, want):
     return bytes(out), i
 
 
-class Ps2SlzBlock:
-    """The 16-byte PlayStation 2 wrapper."""
+class PsSlzBlock:
+    """The 16-byte PlayStation wrapper, used on the PlayStation and PS2."""
 
     def __init__(self, data):
         if data[:3] != MAGIC:
@@ -314,17 +327,17 @@ class Ps2SlzBlock:
 
     @property
     def total_size(self):
-        return PS2_WRAPPER_SIZE + self.compressed_size
+        return PS_WRAPPER_SIZE + self.compressed_size
 
     def decompress(self):
-        payload = self.data[PS2_WRAPPER_SIZE:
-                            PS2_WRAPPER_SIZE + self.compressed_size]
-        if self.method == PS2_STORED:
+        payload = self.data[PS_WRAPPER_SIZE:
+                            PS_WRAPPER_SIZE + self.compressed_size]
+        if self.method == PS_STORED:
             if self.compressed_size != self.uncompressed_size:
                 raise SlzError("method 0 with unequal sizes")
             return payload
-        if self.method == PS2_LZ77:
-            out, used = unpack_ps2_lz77(payload, self.uncompressed_size)
+        if self.method == PS_LZ77:
+            out, used = unpack_ps_lz77(payload, self.uncompressed_size)
             if len(out) != self.uncompressed_size:
                 raise SlzError("method 1 produced %d of %d bytes"
                                % (len(out), self.uncompressed_size))
@@ -337,18 +350,18 @@ class Ps2SlzBlock:
         raise SlzError("method %d is not decoded yet" % self.method)
 
 
-def ps2_blocks(blob, base=0):
-    """Yield every plausible PlayStation 2 SLZ block in a buffer."""
+def ps_blocks(blob, base=0):
+    """Yield every plausible PlayStation SLZ block in a buffer."""
     at = 0
     while True:
         at = blob.find(MAGIC, at)
-        if at < 0 or at + PS2_WRAPPER_SIZE > len(blob):
+        if at < 0 or at + PS_WRAPPER_SIZE > len(blob):
             return
-        block = Ps2SlzBlock(blob[at:at + PS2_WRAPPER_SIZE])
+        block = PsSlzBlock(blob[at:at + PS_WRAPPER_SIZE])
         if block.method <= 0x0F and block.sound:
             end = at + block.total_size
             if end <= len(blob):
-                yield base + at, Ps2SlzBlock(blob[at:end])
+                yield base + at, PsSlzBlock(blob[at:end])
         at += 1
 
 
@@ -482,12 +495,14 @@ def cmd_verify(args):
 
 
 def cmd_scan(args):
-    """Walk a PlayStation 2 image for SLZ blocks and decode what is readable.
+    """Walk a PlayStation image for SLZ blocks and decode what is readable.
 
-    The point of the census is the method histogram beside the payload tags:
-    the tags are what the title calls its assets, and before session 14 the
-    two PlayStation 2 discs in this repository were recorded as "SLZ and
-    nothing else this repository recognises".
+    The point of the census is the method histogram beside the payload tags.
+    On the PlayStation 2 the tags are what the title calls its assets, and
+    before session 14 those discs were recorded as "SLZ and nothing else this
+    repository recognises". On the PlayStation there are no tags at all: the
+    blocks hold MIPS overlays and Sony TIM textures, which is how the wrapper
+    was dated as older than tri-Ace's own formats.
     """
     size = os.path.getsize(args.image)
     windows = args.windows
@@ -502,7 +517,7 @@ def cmd_scan(args):
             base = (size - span) * index // max(windows - 1, 1)
             fh.seek(base)
             blob = fh.read(span)
-            found = list(ps2_blocks(blob, base))
+            found = list(ps_blocks(blob, base))
             for pos, block in found:
                 methods[block.method] = methods.get(block.method, 0) + 1
                 tried[block.method] = tried.get(block.method, 0) + 1
@@ -554,7 +569,7 @@ def main(argv=None):
             s.add_argument("output")
         s.set_defaults(func=func)
 
-    s = sub.add_parser("scan", help="census a PlayStation 2 image for SLZ blocks")
+    s = sub.add_parser("scan", help="census a PlayStation image for SLZ blocks")
     s.add_argument("image")
     s.add_argument("--windows", type=int, default=8)
     s.add_argument("--window", type=lambda x: int(x, 0), default=16 << 20,

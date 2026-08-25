@@ -1,15 +1,18 @@
 # SLZ — the compressed resource wrapper
 
-**The oldest thing in the engine.** It is on Star Ocean: Till the End of
-Time's PlayStation 2 disc in 2003, five years before Infinite Undiscovery, and
-still in Star Ocean 5 in 2016 — older than the container, older than the
-payload formats, older than the name ASKA is attached to in this repository.
-See [§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
+**The oldest thing in the engine, and older than the engine.** It is on Star
+Ocean: The Second Story's PlayStation disc in **1998**, ten years before
+Infinite Undiscovery, and still in Star Ocean 5 in 2016 — older than the
+container, older than the payload formats, older than the name ASKA is attached
+to in this repository. Nothing it wraps in 1998 is tri-Ace's own: the blocks
+hold MIPS overlay code and Sony `TIM` textures, so the wrapper predates the
+studio's file formats rather than accompanying them. See
+[§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
 [aska-across-titles.md](../aska-across-titles.md).
 
-**One of the PlayStation 2 codecs is now readable.** Method 1 is tri-Ace's own
-LZ77, and [§2b](#2b-the-playstation-2-codec-method-1) specifies it. Methods 2
-and 3 are not.
+**One of the PlayStation codecs is readable.** Method 1 is tri-Ace's own LZ77,
+and [§2b](#2b-the-playstation-codec-method-1) specifies it. It is unchanged
+from 1998 to 2006. Methods 2 and 3 are not decoded.
 
 Most of Infinite Undiscovery's bulk is compressed. Every `MESH`, `MTEX`,
 `SCE-`, `SKAC` and `APAC` resource sits behind a header whose first three bytes
@@ -84,10 +87,13 @@ that sits before the counted region.
 
 ## 2a. Three revisions, and what the oldest one explains
 
-The name is the same in every tri-Ace title from 2005 on. The header is not,
-and the differences are small enough to line up in one table.
+The name is the same in every tri-Ace title from 1998 on. The header is not,
+and the differences are small enough to line up in one table. The first column
+covers **five discs and eight years** — the PlayStation and PlayStation 2
+titles from Star Ocean: The Second Story to Valkyrie Profile 2 — with not one
+field moved between them.
 
-| | PlayStation 2, 2003–06 | Xbox 360, 2008–10 | PlayStation 3, 2016 |
+| | PlayStation 1–2, 1998–2006 | Xbox 360, 2008–10 | PlayStation 3, 2016 |
 | --- | --- | --- | --- |
 | `0x00` | `SLZ` | `SLZ` | `SLZ` |
 | `0x03` | **method** — 0 stored, 1–3 compressed | 4, always | **method** — 0 stored, 1–3 compressed |
@@ -100,7 +106,8 @@ and the differences are small enough to line up in one table.
 | `0x20` | | | payload |
 | byte order | little-endian | big-endian | big-endian |
 
-Between 2006 and 2008 **one word was inserted at `0x04`**. The size pair and
+So the header held still for eight years and then moved once. Between 2006 and
+2008 **one word was inserted at `0x04`**. The size pair and
 the zero behind it move down by four bytes and nothing else changes. Between
 2008 and 2016 the `0x20` moves from `0x04` to `0x14`, where it is genuinely the
 header size, and XCompress goes away — which it had to, being an Xbox library.
@@ -138,7 +145,7 @@ parse.
 XCompress is only the Xbox 360 answer, and it is an Xbox library, so it could
 never have been the other two.
 
-**The PlayStation 2 method 1 is solved** — [§2b](#2b-the-playstation-2-codec-method-1).
+**The PlayStation 2 method 1 is solved** — [§2b](#2b-the-playstation-codec-method-1).
 It decodes every block that claims it, in two titles three years apart, with no
 failures.
 
@@ -152,13 +159,13 @@ two, and Radiata Stories uses method 3 almost exclusively.
 Their leading bytes are not useless, though. A compressed block begins with a
 flag byte and its first tokens are ordinarily literals, so **the payload magic
 is legible even when the block is not** — which is where most of the vocabulary
-in [§2c](#2c-what-the-playstation-2-titles-call-their-assets) comes from.
+in [§2c](#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not) comes from.
 
 **The PlayStation 3 codecs are still open.** They carry the same method numbers
 0–3 and the same stored method 0, but method 1 there is not the method 1 below:
 tried against Star Ocean 5's blocks it decodes none.
 
-## 2b. The PlayStation 2 codec, method 1
+## 2b. The PlayStation codec, method 1
 
 An LZ77 with byte-wide flags, and nothing more — no ring buffer, no entropy
 coding, no end marker. The decoder stops when it has produced the number of
@@ -211,17 +218,35 @@ it eleven times in the first 6 KB.** The rest produce it never.
 
 ### Status
 
-| | Star Ocean 3, 2003 | Valkyrie Profile 2, 2006 |
-| --- | ---: | ---: |
-| method 1 blocks sampled | 152 | 153 |
-| decode to exactly the stated size | **152** | **153** |
-| failures | 0 | 0 |
+Written from a 2003 disc, applied unmodified to 1998 data:
+
+| | SO2 1998 | Valkyrie Profile 1999 | Star Ocean 3 2003 | Valkyrie Profile 2 2006 |
+| --- | ---: | ---: | ---: | ---: |
+| method 1 blocks sampled | 283 | 1 174 | 152 | 153 |
+| decode to exactly the stated size | **283** | **1 174** | **152** | **153** |
+| failures | 0 | 0 | 0 | 0 |
+
+**1 762 blocks over eight years, no failures and no special cases.**
 
 Radiata Stories writes no method 1 at all in 64 sample windows across its disc,
-which is its own small oddity: it is the middle title of the three and the only
-one that does not use the codec.
+which is its own small oddity: it is the only one of the five that does not use
+the codec.
 
-## 2c. What the PlayStation 2 titles call their assets
+### Which methods each disc uses
+
+| Method | SO2 1998 | VP1 1999 | SO3 2003 | Radiata 2005 | VP2 2006 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0, stored | 1 | 4 | — | 14 | 2 |
+| 1, LZ77 | 242 | 722 | 152 | **none** | 153 |
+| 2 | 2 303 | 1 627 | 482 | 2 | 390 |
+| 3 | **none** | **none** | 1 505 | 827 | 333 |
+
+**Method 3 does not exist on the PlayStation.** It arrives with the PlayStation
+2 and becomes the default there. **Method 2 is on every disc from 1998 on** and
+has never decoded, which makes it the single most valuable thing still shut in
+this whole family.
+
+## 2c. What the PlayStation 2 titles call their assets — and what the PlayStation ones do not
 
 Before this, the PlayStation 2 discs were recorded as "`SLZ` and nothing else
 this repository recognises". They have a vocabulary, and it is not Infinite
@@ -285,7 +310,23 @@ in the 28 KB specimen, `Bip01 Pelvis` through `DummyBox22` and `CTRL01`.
 float arrays behind offset tables is shaped like an animation, which would put
 `ATR` where `AAF ` later sits, but no field beyond the header has been checked.
 
-Two of those rows matter beyond the census. **`DTT\0` is the payload of
+### The PlayStation discs have none of it
+
+Not one of those tags appears on Star Ocean 2's or Valkyrie Profile's disc — as
+a payload head, as a leading literal of an unopened block, or anywhere inside
+the decoded data. What the 1998 and 1999 blocks hold instead is **MIPS overlay
+code**, **Sony `TIM` textures** (29 of 29 sampled on Valkyrie Profile have a
+self-consistent header) and offset-table archives with no magic at all.
+
+That dates the vocabulary. The wrapper is 1998; the named formats are not, and
+they appear between 1999 and 2003. Seven `DTT\0` sequences across the two
+PlayStation discs were checked and are false — all unaligned, all inside
+nibble-packed image data, three of them inside byte-identical copies of one
+blob.
+
+### Two rows that matter beyond the census
+
+**`DTT\0` is the payload of
 `TTD-`**, the one resource tag on Infinite Undiscovery's disc with no reading
 at all — and Valkyrie Profile 2 ships it stored, in the clear, two years
 earlier. **`PACK`** was recorded as new in Star Ocean 4 in 2009; it is the
