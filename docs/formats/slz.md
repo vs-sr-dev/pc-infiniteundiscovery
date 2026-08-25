@@ -10,9 +10,16 @@ studio's file formats rather than accompanying them. See
 [§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
 [aska-across-titles.md](../aska-across-titles.md).
 
-**One of the PlayStation codecs is readable.** Method 1 is tri-Ace's own LZ77,
-and [§2b](#2b-the-playstation-codec-method-1) specifies it. It is unchanged
-from 1998 to 2006. Methods 2 and 3 are not decoded.
+**Every PlayStation codec is readable.** Method 0 is stored, and methods 1, 2
+and 3 are three settings of one LZ77 that tri-Ace wrote itself: the same
+framing, three different ways of spending the token —
+[§2b](#2b-the-playstation-codec-method-1),
+[§2b-2](#2b-2-method-2-the-same-lz77-with-runs-instead-of-the-longest-match),
+[§2b-3](#2b-3-method-3-the-same-lz77-again-in-halfwords). Method 1 is unchanged
+from 1998 to 2006 and so are the other two. `SLE`, the string that has sat
+beside `SLZ` since 2003 without ever being explained, is not a codec but an
+encryption envelope around all four —
+[§2b-4](#2b-4-what-sle-is).
 
 **And it left the studio.** Eternal Sonata, by tri-Crescendo on the Xbox 360 in
 2007, compresses every file it ships with the same algorithm, the same framing
@@ -150,25 +157,34 @@ parse.
 XCompress is only the Xbox 360 answer, and it is an Xbox library, so it could
 never have been the other two.
 
-**The PlayStation 2 method 1 is solved** — [§2b](#2b-the-playstation-codec-method-1).
-It decodes every block that claims it, in two titles three years apart, with no
-failures.
+**All three PlayStation codecs are solved**, and they are one codec. Method 1
+is [§2b](#2b-the-playstation-codec-method-1); method 2, which trades the
+longest match for a run, is
+[§2b-2](#2b-2-method-2-the-same-lz77-with-runs-instead-of-the-longest-match);
+method 3, which widens every unit to a halfword, is
+[§2b-3](#2b-3-method-3-the-same-lz77-again-in-halfwords). Between them they
+decode every block that claims them on all five discs, 1998 to 2006, with no
+failures and one arithmetic special case.
 
-**Methods 2 and 3 are not.** Neither is stored, neither is method 1 under
-another number, and neither is plain LZSS: 480 combinations of offset width,
-length width, byte order, minimum match, flag polarity and bit order were tried
-against 60 PlayStation 3 blocks and none decoded one. What they cost is most of
-the disc — 1 987 of the 2 139 blocks sampled on Star Ocean 3 use one of the
-two, and Radiata Stories uses method 3 almost exclusively.
+Until session 17 read them off the executable, methods 2 and 3 were reached for
+only by search, and the record of that is worth keeping: 480 combinations of
+offset width, length width, byte order, minimum match, flag polarity and bit
+order, tried against 60 PlayStation 3 blocks, decoding none. **That search was
+looking in the wrong title.** Method 2 on the PlayStation is byte-flag framed
+and always was — it is method 1's framing exactly — and no amount of searching
+Star Ocean 5's blocks could have said so.
 
-Their leading bytes are not useless, though. A compressed block begins with a
-flag byte and its first tokens are ordinarily literals, so **the payload magic
-is legible even when the block is not** — which is where most of the vocabulary
-in [§2c](#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not) comes from.
+One habit from those years is still useful and outlives them. A compressed
+block begins with a flag byte and its first tokens are ordinarily literals, so
+**the payload magic is legible even when the block is not**, which is where
+most of the vocabulary in
+[§2c](#2c-what-the-playstation-2-titles-call-their-assets--and-what-the-playstation-ones-do-not)
+came from before there was a decoder to confirm it with.
 
-**The PlayStation 3 codecs are still open.** They carry the same method numbers
-0–3 and the same stored method 0, but method 1 there is not the method 1 below:
-tried against Star Ocean 5's blocks it decodes none.
+**The PlayStation 3 codecs are still open**, and are now known to be genuinely
+different rather than merely untried. Star Ocean 5 carries the same method
+numbers 0–3 and the same stored method 0, but its methods 1, 2 and 3 were each
+run against 400 of its blocks with the decoders below and decode none of them.
 
 ## 2b. The PlayStation codec, method 1
 
@@ -247,9 +263,160 @@ the codec.
 | 3 | **none** | **none** | 1 505 | 827 | 333 |
 
 **Method 3 does not exist on the PlayStation.** It arrives with the PlayStation
-2 and becomes the default there. **Method 2 is on every disc from 1998 on** and
-has never decoded, which makes it the single most valuable thing still shut in
-this whole family.
+2 and becomes the default there. **Method 2 is on every disc from 1998 on.**
+
+Both are specified below. Neither was guessed: session 17 read them off the two
+dispatchers, and the two dispatchers were found by the string.
+
+### How both were found: the string sits on top of its own jump table
+
+`SLZ\0` occupies an eight-byte slot **twice** in Star Ocean 2's `SCUS_944.21`,
+at `0x8002A860` and `0x8002AB0C`, and twice again in every PlayStation 2
+executable — `0x0014D6C0` and `0x0014D7B0` in Star Ocean 3's `SLES_820.28`.
+Immediately after each copy sits a table of 31 code pointers whose gaps grow
+`0x24, 0x20, 0x24, 0x2C, 0x34 …` for sixteen entries, jump by `0x140`, and then
+repeat the same sequence for fifteen more.
+
+That shape is the whole answer in miniature. The table is one jump table of
+**unrolled copy routines**, indexed by a length nibble: entries 0 to 15 are
+lengths 3 to 18 and belong to method 1, entries 16 to 30 are lengths 3 to 17
+and belong to method 2. Two codecs sharing one table is why the two functions
+sit beside each other, and finding the table found both.
+
+The single code reference to the string is the dispatcher. In Star Ocean 2 it
+is at `0x800121A8`:
+
+    strncmp(header, "SLZ", 3)      -- at 0x800121DC; a non-zero result returns 0
+    skip n blocks by header +0x0C  -- the loop at 0x800121FC
+    lbu $v1, 3($s0)                -- the method byte, at 0x8001221C
+      0 -> memcpy of header +0x08 bytes from header +0x10
+      1 -> 0x800122B4
+      2 -> 0x8001275C
+      anything else -> return 0
+
+which is also a **free check on the whole exercise**: one of the three arms has
+to be the codec that was already specified, from the outside, by search. It is.
+
+The PlayStation 2 dispatcher, at `0x00102540`, is the same function with two
+additions — `SLE` beside `SLZ`, and a fourth arm:
+
+    0 -> memcpy    1 -> 0x00101ED0    2 -> 0x001019C0    default -> 0x00101520
+
+Method 2 is handed **four** arguments there and method 3 **three**. That
+difference is the specification talking: method 2 has to be told how much
+output to make, and method 3 does not.
+
+## 2b-2. Method 2: the same LZ77, with runs instead of the longest match
+
+Method 2 is method 1 with one slot of the length field spent differently. The
+framing is identical — byte-wide flags read from the least significant bit up,
+a 1 for a literal and a 0 for a two-byte token — and so is the distance field:
+
+| | |
+| --- | --- |
+| distance | <code>a &#124; ((b & 0x0F) << 8)</code>, as in method 1 |
+| length | `(b >> 4) + 3` — but only **3 to 17**, for a nibble of 0 to 14 |
+
+A nibble of **15** is not a match. The same two bytes are re-read as a **run**,
+in one of two forms, chosen by whether the low nibble of `b` is zero:
+
+| `b & 0x0F` | count | byte | token size |
+| --- | --- | --- | ---: |
+| 1 .. 15 | `(b & 0x0F) + 3` — 4 to 18 | `a` | 2 |
+| 0 | `a + 0x13` — 19 to 274 | the third token byte | 3 |
+
+So a run of up to 18 bytes costs two bytes and a run of up to 274 costs three,
+where method 1 would spend two bytes for every 18. That is the whole
+difference, and on the sparse, zero-heavy data these discs are full of it is
+worth a great deal: method 2 reaches 2.65:1 on Star Ocean 2 against method 1's
+2.07:1 on the same disc.
+
+**There is no end-of-stream token.** Method 1 stops on a distance of zero;
+method 2 stops when the output reaches the size stated at header `+0x08`, which
+is exactly why the dispatcher passes it that size and passes method 1 nothing.
+
+One consequence is worth stating, because it is what the corpus test below
+rests on: with no terminator, the input is consumed to its last byte rather
+than to a marker somewhere before it.
+
+## 2b-3. Method 3: the same LZ77 again, in halfwords
+
+Method 3 is method 1 with every unit widened from a byte to a 16-bit halfword.
+Nothing else changes — not the framing, not the field split, not the
+terminator.
+
+| | Method 1 | Method 3 |
+| --- | --- | --- |
+| flag unit | one `u8`, 8 tokens | one `u16`, **16 tokens**, still least significant bit first |
+| literal | one byte | one **halfword** |
+| token | two bytes, `a` and `b` | one `u16` |
+| distance | <code>a &#124; ((b & 0x0F) << 8)</code>, in bytes | `tok & 0x0FFF`, in **halfwords** — 2 to 8 190 bytes |
+| length | `(b >> 4) + 3`, in bytes — 3 to 18 | `(tok >> 12) + 2`, in **halfwords** — 4 to 34 bytes |
+| end of stream | distance 0 | distance 0 |
+
+Because it keeps the terminator it needs no size, which is the argument-count
+difference in the dispatcher.
+
+One detail matters for anyone reimplementing it. Distances below 18 halfwords
+route through a halfword-at-a-time loop at `0x00101978`, so overlapping copies
+propagate the way an LZ77 is expected to. The unrolled copies above that
+threshold read their entire source before writing any of it, which would be
+wrong for an overlap and is safe only because the threshold excludes one. A
+decoder that propagates byte by byte over `distance * 2` bytes gets the same
+answer everywhere.
+
+**Odd stated sizes overshoot by one.** The codec emits halfwords and stops on a
+token rather than on a count, so its output is always an even number of bytes.
+A block whose header states an odd size therefore produces exactly one byte too
+many, and that byte is padding — 3 blocks of 3 000 on the Radiata Stories disc,
+all three with an odd stated size, and no other kind of mismatch anywhere in
+the corpus.
+
+## 2b-4. What `SLE` is
+
+`SLE` has sat beside `SLZ` in every executable from 2003 to 2010 and had never
+been anything but a string. The PlayStation 2 dispatcher says what it is,
+because it compares both magics two instructions apart and gives `SLE` a branch
+of its own ahead of the method switch.
+
+That branch is a **decryption pass over the payload, in place**:
+
+    plain[j] = (cipher[j] - 3 * (j + 1)) ^ key[j & 15]
+
+— a 16-byte key XOR, with a subtractive counter that starts at 3 and advances
+by 3 per byte, unrolled eight bytes at a time with a byte-wise remainder loop
+at `0x001027A8`. The key is not in the file: it is read with a single `lq` from
+`0x001CC730`, past the end of the loaded image, and those two `lq`
+instructions — one per copy of the dispatcher — are the **only** two accesses
+at that offset anywhere in the executable. Nothing in the executable writes it.
+
+Then comes the part that settles the name. Having decrypted the payload, the
+branch does this:
+
+    addiu $v0, $zero, 0x5A
+    sb    $v0, 2($s1)
+
+It stores `Z` over the `E` at header `+0x02`, turning the block into an
+ordinary `SLZ` one, and falls through into the method switch. **`SLE` is not a
+codec at all: it is an encryption envelope around the same four methods**, and
+the last thing it does is erase itself.
+
+### And nothing on these discs is inside it
+
+| | SO2 1998 | VP1 1999 | SO3 2003 | Radiata 2005 | VP2 2006 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| raw `SLE` byte sequences | 0 | 0 | 220 | 210 | 312 |
+| with a header that could be real | — | — | 3 | 16 | 127 |
+| that walk to a neighbouring magic | — | — | 0 | 0 | 0 |
+| that decode, encrypted or not | — | — | 0 | 0 | 0 |
+
+Valkyrie Profile 2's 127 are the cautionary number. "Sizes that make sense and
+a zero at `+0x0C`" sounds like a test and is not one: 40 % of chance `SLE`
+sequences inside compressed data pass it. Only one of the 127 is even
+sector-aligned, none is followed by another block where its own length says one
+should be, and none decodes under any of the four methods, with or without the
+zero-key decrypt. So the 2003 executable ships the envelope and the 2003, 2005
+and 2006 discs ship nothing in it.
 
 ## 2c. What the PlayStation 2 titles call their assets — and what the PlayStation ones do not
 
@@ -335,9 +502,10 @@ blob.
 `TTD-`**, the one resource tag on Infinite Undiscovery's disc with no reading
 at all — and Valkyrie Profile 2 ships it stored, in the clear, two years
 earlier. **`PACK`** was recorded as new in Star Ocean 4 in 2009; it is the
-leading literal of roughly 190 of the 1 987 blocks on the 2003 disc that do
-not yet decode. Its header cannot be checked until methods 2 and 3 open, so that is
-a tag six years early and not yet a container six years early.
+leading literal of roughly 190 of the 1 987 blocks on the 2003 disc that were
+undecodable when that count was taken. Those blocks open now, so the header
+*can* be checked, and checking it is the outstanding half of
+[question 24](../../TODO.md).
 
 ## 2d. The tri-Crescendo variant
 
@@ -390,8 +558,11 @@ The eighth carries a magic instead: `op.bmd` comes out as `BMD ` with `0x1DCF`
 byte at `+0x03`, with the same range and the same meaning, moved from a block
 header into a per-file table.
 
-Methods 2 and 3 do not open, exactly as tri-Ace's do not, and here the negative
-is provable rather than merely reported: `btldata/voice/bos01.csf` is method 3
+Methods 2 and 3 do not open. tri-Ace's now do, and tri-Crescendo's were
+re-tested against them in both nibble orders in session 17: the run escape and
+the halfword widening are both absent here, so **the two studios share method 1
+and nothing above it.** The local negative is provable rather than merely
+reported: `btldata/voice/bos01.csf` is method 3
 and must decompress to `CSF `, so its first output byte is `C`; its first byte
 on disc has bit 0 clear, which under this framing makes the first token a
 back-reference at output position zero. Method 3 is not this family.
@@ -563,7 +734,11 @@ report a corrupt block that is nothing of the kind.
 * [`tools/lzx.py`](../../tools/lzx.py) — the LZX decoder, written from the
   published algorithm. No dependencies. Stateful, and fed one frame at a time.
 * [`tools/slz.py`](../../tools/slz.py) — the SLZ/XCompress container:
-  `info`, `decompress`, and `verify` for bulk self-checking.
+  `info`, `decompress`, and `verify` for bulk self-checking; `scan` for a
+  PlayStation or PlayStation 2 image, which decodes all four methods.
+* [`tools/disasm.py`](../../tools/disasm.py) — how §2b-2, §2b-3 and §2b-4 were
+  read: `strings`, `xref`, `table` and `dis` over a `PS-X EXE` or a
+  PlayStation 2 ELF.
 
 ```
 python tools/slz.py info       <file> --offset N

@@ -681,7 +681,47 @@ table is a finding in itself:
 
 **Method 3 does not exist on the PlayStation** and is the default on all three
 PlayStation 2 discs, so the codec set grew between 1999 and 2003. **Method 2 is
-on every disc from 1998 on** and has never decoded.
+on every disc from 1998 on.**
+
+Session 17 read methods 2 and 3 off the two dispatchers — `SCUS_944.21` at
+`0x800121A8` and `SLES_820.28` at `0x00102540` — and the answer to what the
+codec set is, is that there is only one codec. **Methods 1, 2 and 3 are one
+LZ77 with three settings**: the same byte-wide flags read from bit 0 up, the
+same literal-on-1 polarity, the same two-byte token. Method 2 spends the top
+slot of the length field on a **run** and drops the end token, method 3 widens
+**every unit to a halfword** and keeps it. Full specifications in
+[slz.md §2b-2](formats/slz.md#2b-2-method-2-the-same-lz77-with-runs-instead-of-the-longest-match)
+and [§2b-3](formats/slz.md#2b-3-method-3-the-same-lz77-again-in-halfwords).
+
+So the set did not grow by acquiring a second compressor between 1999 and 2003.
+It grew by someone adding a `u16` variant of the one that was already there —
+which fits a PlayStation 2 arriving with wider memory paths, and fits the
+studio's habits everywhere else in this document.
+
+That also settles what the codec set is *not*. tri-Crescendo's method 2 in
+Eternal Sonata was tested against tri-Ace's, in both nibble orders, and reaches
+the stated size on only one file of four while consuming a third of the input:
+the two studios share method **1** and nothing above it. Star Ocean 5's
+PlayStation 3 methods 2 and 3 were tested the same way against 400 blocks and
+decode none of them, which was already true of its method 1. Same numbering,
+same meaning for 0, different codecs behind 1, 2 and 3.
+
+### And `SLE` is not a codec at all
+
+`SLE` sits beside `SLZ` in every executable from 2003 to 2010 and had never
+been more than a string — [question 28](../TODO.md) noted that what it *is* had
+never been established either. The PlayStation 2 dispatcher compares it two
+instructions after `SLZ`, gives it its own branch, decrypts the payload in
+place with `plain[j] = (cipher[j] - 3*(j+1)) ^ key[j & 15]`, and then stores
+`0x5A` over the `E` at header `+0x02` and falls through to the method switch.
+
+**It is an encryption envelope around the same four methods, and it rewrites
+its own magic to `SLZ` once the payload is in the clear.** Which is why it
+never had to appear anywhere: the arrival of `SLE` between 1999 and 2003 is the
+arrival of an *option*, not of a format. Nothing on the 2003, 2005 or 2006
+discs uses it — see
+[slz.md §2b-4](formats/slz.md#2b-4-what-sle-is) for the four-row table that
+rules out all 359 candidate byte sequences.
 
 ### Method 1 is tri-Ace's own LZ77, and it opens
 

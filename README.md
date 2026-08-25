@@ -55,7 +55,8 @@ docs/sessions/ chronological work log
 | `tools/rtti.py` | Recover a C++ class inventory from the MSVC RTTI type descriptors in a decrypted PE. Demangles namespaces, nested types and templates. |
 | `tools/xdbf.py` | Read the XDBF title-metadata database embedded in the executable: achievements in every shipped language, string tables, embedded PNGs. |
 | `tools/lzx.py` | LZX decompressor for the XCompress variant, written from the published algorithm. Frame-based and stateful, which is what the format actually requires. |
-| `tools/slz.py` | The SLZ compressed-resource wrapper, in both of its shipped forms: the Xbox 360 header around a Microsoft XCompress stream, with bulk self-verification against payload self-reported lengths, and the shorter PlayStation 2 header around tri-Ace's own LZ77. Censuses a PlayStation 2 image, decoding what it can and naming the payloads. |
+| `tools/slz.py` | The SLZ compressed-resource wrapper, in both of its shipped forms: the Xbox 360 header around a Microsoft XCompress stream, with bulk self-verification against payload self-reported lengths, and the shorter PlayStation header around tri-Ace's own LZ77 — **all four of its methods**, which are one codec with three settings. Censuses a PlayStation or PlayStation 2 image, decoding it and naming the payloads. |
+| `tools/disasm.py` | Find the code behind a string in a PlayStation `PS-X EXE` or PlayStation 2 ELF: locate the magic, scan for the `lui`/`addiu` pairs that build its address, print a pointer table with the gaps between its targets, and disassemble — with the R5900's `lq`/`sq` handled rather than mis-decoded as vector instructions. This is how methods 2 and 3 were read. |
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
 | `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
@@ -144,8 +145,8 @@ Container offsets for the European release are tabulated in
   this baseline, from Star Ocean: The Second Story on the PlayStation in 1998
   to Star Ocean 5 and Star Ocean: Anamnesis in 2016, across seven consoles.
   Nine of the twelve are the same engine, two are not, and one cannot be asked.
-  `SLZ` runs through all of it from **1998** to 2016 and one of its codecs
-  decodes unmodified across eight of those years — and on the two oldest discs
+  `SLZ` runs through all of it from **1998** to 2016 and **every codec behind
+  it on those five discs now decodes** — and on the two oldest discs
   it wraps nothing of tri-Ace's at all, which dates the wrapper as older than
   the engine's own file formats. A thirteenth specimen asks a different
   question: *Eternal Sonata*, by the offshoot studio **tri-Crescendo**, carries
@@ -163,10 +164,14 @@ Container offsets for the European release are tabulated in
   oldest thing in the engine, on a tri-Ace disc from **1998** and still there
   in 2016, in three header revisions — the first of which holds still for five
   discs and eight years. The PlayStation revision wraps tri-Ace's own LZ77
-  rather than an SDK library, and that codec is specified here: 1 762 of 1 762
-  sampled blocks from 1998, 1999, 2003 and 2006 decode with no failures — as do
-  all eight method-1 files in a 2007 title by a different studio, once two
-  nibbles are swapped.
+  rather than an SDK library, and **all three of its compressed methods are
+  specified here** — they are one algorithm with three settings, one of them
+  spending its longest match on runs and one of them counting in halfwords.
+  **62 167 blocks of 62 167 from 1998, 1999, 2003, 2005 and 2006 decode with no
+  failures**, as do all eight method-1 files in a 2007 title by a different
+  studio, once two nibbles are swapped. `SLE`, the string that has sat beside
+  `SLZ` since 2003, turns out to be an encryption envelope that rewrites its
+  own magic once the payload is in the clear.
 * [AIF](docs/formats/aif.md) — the Aska Image File: every texture in the game,
   stored in the Xbox 360 GPU's own tiled layout.
 * [ASF](docs/formats/asf.md) — the Aska Scene File: what every `MESH` resource

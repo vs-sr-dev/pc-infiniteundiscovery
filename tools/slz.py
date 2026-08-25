@@ -16,8 +16,11 @@ This file reads two of them:
   below describe.
 * the **PlayStation** wrapper, 16 bytes, around tri-Ace's own LZ77. It is the
   same on the PlayStation and the PlayStation 2, unchanged from 1998 to 2006.
-  Method 0 is stored and **method 1** is the codec cracked in session 14 and
-  confirmed on 1998 data in session 15; methods 2 and 3 are not read yet. Use
+  **All four methods read.** 0 is stored, 1 is tri-Ace's LZ77, 2 is that same
+  LZ77 with its top length slot traded for a run and no end token, and 3 is
+  that same LZ77 with every unit widened to a halfword. Sessions 14 and 15 got
+  method 1 by search; session 17 got 2 and 3 off the two dispatchers, in
+  `SCUS_944.21` at `0x800121A8` and in `SLES_820.28` at `0x00102540`. Use
   `slz.py scan` on a PlayStation or PlayStation 2 image.
 
   A PlayStation disc is normally a `MODE2/2352` `.bin`; `scan` wants the user
@@ -256,7 +259,7 @@ class SlzBlock:
 # of zeroes is written.
 #
 # Method 3 never appears on a PlayStation disc and is the default on every
-# PlayStation 2 one; method 2 is on all five and has never decoded.
+# PlayStation 2 one; method 2 is on all five. Both are specified below.
 #
 # How the fields were pinned down, since none of it is guessable: the flag
 # framing comes from a block whose plaintext begins "so3mclib 1.80i", where
@@ -271,6 +274,8 @@ PS_WRAPPER_SIZE = 0x10
 
 PS_STORED = 0
 PS_LZ77 = 1
+PS_LZ77_RLE = 2
+PS_LZ77_WIDE = 3
 
 
 def unpack_lz77(src, want, swap_nibbles=False):
@@ -326,6 +331,148 @@ def unpack_ps_lz77(src, want):
     return unpack_lz77(src, want, swap_nibbles=False)
 
 
+def unpack_ps_lz77_rle(src, want):
+    """Method 2: method 1 with the top length slot traded for a run.
+
+    Read off the PlayStation dispatcher in Star Ocean: The Second Story --
+    `SCUS_944.21`, the decompressor at `0x8001275C` -- and unchanged on the
+    PlayStation 2. It shares method 1's framing exactly: byte-wide flags read
+    from the least significant bit up, a 1 for a literal and a 0 for a
+    two-byte token. What differs is what the top of the length field means and
+    where the stream stops.
+
+        dist = a | ((b & 0x0F) << 8)      as in method 1
+        len  = (b >> 4) + 3               3 .. 17, for a nibble of 0 .. 14
+
+    A nibble of **15** is not a match at all. It is a run, and the same two
+    bytes are re-read as one of two forms:
+
+        b & 0x0F != 0    count = (b & 0x0F) + 3    4 .. 18    byte = a
+        b & 0x0F == 0    count = a + 0x13         19 .. 274   byte = the
+                                                  third token byte
+
+    So a run costs two bytes up to 18 and three beyond, which is why the codec
+    beats method 1 by a wide margin on the sparse data these discs are full of.
+
+    There is **no end-of-stream token**: method 1 stops on a distance of zero,
+    and method 2 stops when the output reaches the size the header states. The
+    caller therefore must pass `want`, and the engine does -- the dispatcher
+    hands this codec the uncompressed size in `$a3` and hands method 1 nothing.
+
+    Both codecs share one jump table of unrolled copies, at `0x8002A868`:
+    method 1 takes entries 0 .. 15 for lengths 3 .. 18 and method 2 takes
+    entries 16 .. 30 for lengths 3 .. 17. That is the whole of the 31-entry
+    table sitting immediately after the `SLZ` string, and it is what identified
+    the two functions as a pair.
+    """
+    out = bytearray()
+    i = 0
+    n = len(src)
+    flags = 0
+    bits = 0
+    while len(out) < want:
+        if bits == 0:
+            if i >= n:
+                break
+            flags = src[i]
+            i += 1
+            bits = 8
+        literal = flags & 1
+        flags >>= 1
+        bits -= 1
+        if literal:
+            if i >= n:
+                break
+            out.append(src[i])
+            i += 1
+            continue
+        if i + 1 >= n:
+            break
+        a, b = src[i], src[i + 1]
+        field = a | ((b & 0x0F) << 8)
+        nibble = b >> 4
+        if nibble == 0x0F:
+            if field < 0x100:
+                if i + 2 >= n:
+                    break
+                value = src[i + 2]
+                count = field + 0x13
+                i += 3
+            else:
+                value = field & 0xFF
+                count = (field >> 8) + 3
+                i += 2
+            out += bytes([value]) * count
+            continue
+        length = nibble + 3
+        start = len(out) - field
+        for k in range(length):
+            at = start + k
+            out.append(out[at] if 0 <= at < len(out) else 0)
+        i += 2
+    return bytes(out), i
+
+
+def unpack_ps_lz77_wide(src):
+    """Method 3: method 1 with every unit widened to a halfword.
+
+    Read off the PlayStation 2 dispatcher in Star Ocean 3 -- `SLES_820.28`,
+    the decompressor at `0x00101520`. It is not on either PlayStation disc,
+    and it is the default on all three PlayStation 2 ones.
+
+    Everything method 1 counts in bytes, this counts in 16-bit units:
+
+        flags     one `u16`, sixteen tokens, least significant bit first
+        literal   one `u16` copied straight through
+        token     one `u16`
+                    dist = tok & 0x0FFF        in halfwords, so 2 .. 8190 bytes
+                    len  = (tok >> 12) + 2     in halfwords, so 4 .. 34 bytes
+        end       a distance of zero
+
+    Because it keeps method 1's end token, the engine passes it no size: the
+    dispatcher calls this one with three arguments and method 2 with four.
+    Distances below 18 halfwords route through a halfword-at-a-time loop, so
+    overlapping copies propagate the way an LZ77 is expected to; the unrolled
+    copies above that threshold read their whole source before writing, which
+    is safe only because they can never overlap.
+
+    Returns `(output, bytes consumed)` like the others, but takes no `want` --
+    the stream says where it ends.
+    """
+    out = bytearray()
+    i = 0
+    n = len(src)
+    flags = 0
+    bits = 0
+    while True:
+        if bits == 0:
+            if i + 1 >= n:
+                break
+            flags = src[i] | (src[i + 1] << 8)
+            i += 2
+            bits = 16
+        literal = flags & 1
+        flags >>= 1
+        bits -= 1
+        if i + 1 >= n:
+            break
+        if literal:
+            out += src[i:i + 2]
+            i += 2
+            continue
+        token = src[i] | (src[i + 1] << 8)
+        i += 2
+        dist = token & 0x0FFF
+        if dist == 0:
+            break
+        length = ((token >> 12) + 2) * 2
+        start = len(out) - dist * 2
+        for k in range(length):
+            at = start + k
+            out.append(out[at] if 0 <= at < len(out) else 0)
+    return bytes(out), i
+
+
 class PsSlzBlock:
     """The 16-byte PlayStation wrapper, used on the PlayStation and PS2."""
 
@@ -355,16 +502,36 @@ class PsSlzBlock:
             return payload
         if self.method == PS_LZ77:
             out, used = unpack_ps_lz77(payload, self.uncompressed_size)
-            if len(out) != self.uncompressed_size:
-                raise SlzError("method 1 produced %d of %d bytes"
-                               % (len(out), self.uncompressed_size))
-            # The encoder pads to a multiple of four, so a couple of bytes are
-            # expected to be left over; more than that means the walk drifted.
-            if not 0 <= self.compressed_size - used <= 8:
-                raise SlzError("method 1 consumed %d of %d bytes"
-                               % (used, self.compressed_size))
-            return out
+            return self._check(1, out, used)
+        if self.method == PS_LZ77_RLE:
+            out, used = unpack_ps_lz77_rle(payload, self.uncompressed_size)
+            return self._check(2, out, used)
+        if self.method == PS_LZ77_WIDE:
+            out, used = unpack_ps_lz77_wide(payload)
+            # The codec writes halfwords and stops on a token rather than on a
+            # count, so its output is always an even number of bytes. A block
+            # whose stated size is odd therefore overshoots it by exactly one,
+            # and that last byte is padding: 3 blocks of 3 000 on the Radiata
+            # Stories disc, all three with an odd size and no other kind of
+            # mismatch anywhere in the corpus.
+            if (self.uncompressed_size % 2
+                    and len(out) == self.uncompressed_size + 1):
+                out = out[:self.uncompressed_size]
+            return self._check(3, out, used)
         raise SlzError("method %d is not decoded yet" % self.method)
+
+    def _check(self, method, out, used):
+        """Both halves of the test: the stated size out, the whole block in."""
+        if len(out) != self.uncompressed_size:
+            raise SlzError("method %d produced %d of %d bytes"
+                           % (method, len(out), self.uncompressed_size))
+        # The encoder pads to a multiple of four, so a couple of bytes are
+        # expected to be left over; more than that means the walk drifted.
+        # Methods 2 and 3 in practice leave none at all.
+        if not 0 <= self.compressed_size - used <= 8:
+            raise SlzError("method %d consumed %d of %d bytes"
+                           % (method, used, self.compressed_size))
+        return out
 
 
 def ps_blocks(blob, base=0):
