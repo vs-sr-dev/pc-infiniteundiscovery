@@ -183,9 +183,9 @@ a track that exists, and every animated track appears in exactly the number of
 blocks it declares.
 
 **The record names are the scene's node names.** Pairing each ANIM with the
-MESH resources of the same archive, 130 of 812 files have every record name in
-the node tree, and the ones that do not are mostly particle emitters and lights
-that live in a resource not extracted here.
+MESH resources of the same archive, 174 of 900 files have every record name in
+the node tree — 65.0 % of 146 154 names — and the ones that do not are mostly
+particle emitters and lights that live in a resource not extracted here.
 
 **The constants are the rest pose.** This is the check that comes from outside
 the decode: an ASF `attr` node stores translation, rotation and scale as full
@@ -194,9 +194,17 @@ usually holds exactly those numbers. Over every AAF/ASF pair in the corpus:
 
 | Channel | Reproduces | Of | |
 | --- | ---: | ---: | ---: |
-| 5, against `attr +0x50` translation | 61 805 | 62 104 | 99.5 % |
-| 6, against `attr +0x60` rotation | 37 522 | 40 541 | 92.6 % |
-| 7, against `attr +0x70` scale | 7 871 | 7 903 | 99.6 % |
+| 5, against `attr +0x50` translation | 86 246 | 86 642 | 99.5 % |
+| 6, against `attr +0x60` rotation | 52 297 | 56 880 | 91.9 % |
+| 7, against `attr +0x70` scale | 14 338 | 14 412 | 99.5 % |
+
+These numbers grew in session 12 without moving. The comparison used to run
+over 62 104 translations because 86 model files were reported as having no node
+tree at all; they had one, and the ASF reader was refusing to walk it — see
+[asf.md §2.1](asf.md#21-a-tree-that-does-not-tile). Fixing that brought 26 346
+more channels into the comparison, most of them the game's playable characters,
+and **the agreement held**: 99.5 % before and after on translations. A wrong
+tree would have collapsed it.
 
 The rotation figure is the weakest of the three, and the residual is not noise
 in the decode: sampling it shows the decoded **axis** matching and the angle

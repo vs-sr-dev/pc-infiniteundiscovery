@@ -15,7 +15,7 @@ EPAC        463      143464816  packed data (E)
 WEAP        217       38645248  weapon (identical set on both discs)
 IMG-        141       37127700  image (AIF)
 MTEX        109       30742620  texture, material-bound (AIF, or a nested archive)
-SKAC         98       15009724  unknown, travels with skeletons
+SKAC         98       15009724  character animation bundle (nested)
 APAC         54       28300460  packed data (A)
 TTD-         11          23676  unknown
 MAIF         11         248020  image (AIF)
@@ -82,7 +82,7 @@ MTEX        708      220047776  texture, material-bound (AIF, or a nested archiv
 APAC        620      300496748  packed data (A)
 WEAP        217       38645248  weapon (identical set on both discs)
 IMG-        172       43291284  image (AIF)
-SKAC         98       15009724  unknown, travels with skeletons
+SKAC         98       15009724  character animation bundle (nested)
 MAIF         45        1917596  image (AIF)
 AREA         18         141792  area / level
 NODE         17        2607456  scene node

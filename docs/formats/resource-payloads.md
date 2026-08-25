@@ -18,7 +18,7 @@ once.
 | `MESH` | `SLZ` → `ASF ` | Aska Scene File, compressed |
 | `MTEX` | `SLZ` → `AIF ` | image, compressed — or a nested archive |
 | `SCE-` | `SLZ` → `-CNS00.3` | [`SNC-` scene script](snc.md), version 3.00, compressed |
-| `SKAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
+| `SKAC` | `SLZ` → `MRON00.2` | nested NORM archive — a character's extra animations, compressed |
 | `APAC` | `SLZ` → `MRON00.2` | nested NORM archive, compressed |
 | `EPAC` | `MRON00.2` | nested NORM archive |
 | `SEEK` | `MRON00.2` | nested NORM archive |
@@ -79,6 +79,32 @@ Six tags contain another NORM archive rather than a leaf format — `EPAC`,
 `SEEK`, `TTEX`, `WEAP` directly, and `SKAC`, `APAC` behind SLZ compression. So
 the container structure recurses, and `tools/mron.py` can be pointed at a
 decompressed payload as readily as at a disc image.
+
+### What is inside a `SKAC`
+
+The census could only call `SKAC` "unknown, travels with skeletons". Unpacking
+all 98 of them from disc 1's `ud1.bin` shows what they hold: **250 `ANIM`, 161
+`MESH`, 129 `SIG-` and 90 `COLL`**, and nothing else. They are character
+bundles.
+
+The skeleton those animations drive is **not** inside the bundle — only 16.8 %
+of a `SKAC`'s animation record names appear in its own meshes. It is in the
+neighbouring archive. The `SKAC` archives and the character-model archives
+alternate through one stretch of the container, and for **13 of the 15 `SKAC`
+groups the model archive immediately below it is the best match of all 160**;
+the two exceptions are within 1 % of the best, which is a tie between
+characters that share a bone naming convention.
+
+```
+SKAC 48D3D000 -> model 48791000      SKAC 4C83F000 -> model 4C39F800
+SKAC 4A308800 -> model 49DAF000      SKAC 4DAE2000 -> model 4D6A1800
+SKAC 4AE33000 -> model 4A931000      SKAC 5130A800 -> model 50C52800
+```
+
+So "travels with skeletons" was right, and now it is precise: a `SKAC` is the
+overflow animation set for the character in the archive before it. 59.8 % of
+its record names resolve there; the rest are cameras, lights and effect
+emitters that live elsewhere again.
 
 `MTEX` is a seventh, but only sometimes: of its entries in disc 1's `ud1.bin`,
 most hold an image and 46 hold a nested archive. So the tag says what the

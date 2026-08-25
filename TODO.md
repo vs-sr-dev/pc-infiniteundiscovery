@@ -6,12 +6,12 @@ view, kept current at the end of every session.
 
 Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 
-**Start here next time: question 1.** After session 11 a scene is readable as
+**Start here next time: question 1.** After session 12 a scene is readable as
 *structure* from every side — geometry, materials, textures, skeleton,
 animation, collision, the script that drives it and the navigation mesh the AI
-walks on. What is thin is *meaning*: 246 of the 253 scene-script opcodes are
-known only by number. `SKAC` is the one resource beside a scene still
-unopened.
+walks on — and every skinned object indexes its own file's node tree, so there
+is no shared skeleton to find. What is thin is *meaning*: 246 of the 253
+scene-script opcodes are known only by number.
 
 ## Now the main line of work
 
@@ -24,12 +24,13 @@ Related, and smaller: the header word at `+0x08`, which matches no count in the
 file; the reference spaces `e`, `c`, `k`, `s`, `i`, `u`, `v`, `r`, `g`; what
 `m` is; and the five-digit identifier that ends the spawn commands.
 
-**2. Where a `tree`-less scene keeps its skeleton.** 44 objects in the model
-corpus have a bone pool that overshoots their own file's node count, and every
-one of them sits in a file with no `tree` chunk at all. `SKAC`, which the
-census already describes as travelling with skeletons, is the place to look —
-and it would also say what an animation binds to when the scene has no tree of
-its own, and what a collision file's bone names resolve against.
+**2. The block after a `tree`'s `attr` chunks**, in 86 model files of 369,
+from 144 bytes to 3 600. Most begin with four homogeneous points that read as
+two centre-and-extent pairs; the big character skeletons begin instead with
+32-byte records naming bone chains — `R:M:SK_A_LtHipFt` and its neighbours —
+with floats that read as damping and stiffness, and `R:M:pColCube` names
+beside them. Hair and skirt simulation is the obvious reading and `Aska::Dynamics`
+is in the binary to run it, but nothing is decoded yet.
 
 **3. The ASF chunks nobody has opened:** `ptcl`/`pprn`/`pani` (particles), and
 `modf`, `extl`, `PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr`, `anim`.
@@ -60,58 +61,63 @@ stored vertices are not in.
 
 ## Smaller and self-contained
 
-8. **The NODE leftovers**, small and self-contained after session 11: the low
+8. **Where the other 35 % of animation record names live.** Session 12 took
+   the AAF-against-ASF name match from 52.4 % to 65.0 %; what is left is
+   cameras, lights and effect emitters named in animations that no extracted
+   mesh contains.
+
+9. **The NODE leftovers**, small and self-contained after session 11: the low
    byte of a node's own reference, which is not the partition index, the link
    count, the vertex count or the number of cross-partition links; the values
    in a gate group's slot list; the trailing table at header `+0x28`; and the
    802 nodes whose polygon has only two vertices.
 
-9. **AIF mip chains.** The base level decodes. The Xbox 360 packs the small mip
-   levels into a shared tile, and working that out would complete the texture
-   format.
+10. **AIF mip chains.** The base level decodes. The Xbox 360 packs the small mip
+    levels into a shared tile, and working that out would complete the texture
+    format.
 
-10. **The AIF flags at `0x34`** (`0x500`, `0x200`, `0x40400`, zero).
+11. **The AIF flags at `0x34`** (`0x500`, `0x200`, `0x40400`, zero).
 
-11. **`TTD-`**, whose payload begins `DTT\0`. It is the last resource tag
+12. **`TTD-`**, whose payload begins `DTT\0`. It is the last resource tag
     on the disc with no reading at all.
 
-12. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
+13. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
     the rest of that `0x16000` header as the compiled shader library, 70 of the
     160 shaders in the container. What is left is a per-disc table with a
     `0x100`-byte period, holding no pointers, 51 % of whose blocks are shared
     between the two discs.
 
-13. **The ASF/WMV video runs** in the container gaps — they need splitting into
+14. **The ASF/WMV video runs** in the container gaps — they need splitting into
     individual movies.
 
-14. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
+15. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
     `Aska::AofObject`, `Aska::DirectAofHandler`) but never seen as a payload
     magic on disc. One lead turned up while reading ASF: the chunk holding a
     single object is tagged `ao__`, and `Aska::AofObject` is what the engine
     calls an object. That is a resemblance between two names and nothing more,
     but it is the first place to look.
 
-15. **Disc 2.** Its `SCE-` resources went through session 10's checks alongside
+16. **Disc 2.** Its `SCE-` resources went through session 10's checks alongside
     disc 1's and behave identically, and its audio has the same banks as disc 1
     plus one track disc 1 lacks. The rest of its containers have been walked but
     not put through the same checks.
 
-16. **The `AAC ` leftovers**, small and self-contained after session 5: the
+17. **The `AAC ` leftovers**, small and self-contained after session 5: the
     eight-byte field at `WAVE +0x08`, constant `0x995A7C80_00000015` in 2404
     sounds and zero elsewhere; what the sample count at `+0x24` counts exactly;
     and the `PLBK` playback record, whose shape is known but whose 23 values
     have never been checked against what the engine does with them.
 
-17. **Five missing music tracks** — the numbers 35, 45, 46, 55 and 74 appear on
+18. **Five missing music tracks** — the numbers 35, 45, 46, 55 and 74 appear on
     neither disc. Cut, or somewhere not yet walked.
 
-18. **The other 90 shaders**, which session 7 did not locate: 160 are counted
+19. **The other 90 shaders**, which session 7 did not locate: 160 are counted
     in disc 1's `ud1.bin` and 70 sit in the header block, so the rest are
     presumably inside archives. Related: a shader blob's constant table has a
     structure, and parsing it rather than scanning for strings would give each
     shader its full signature.
 
-19. **The ASF vertex leftovers**, small after session 6: the descriptor nibble
+20. **The ASF vertex leftovers**, small after session 6: the descriptor nibble
     in slot 3 that two meshes set, and the 24 meshes whose stride is rounded up
     rather than exact. The binormal-or-tangent question is now down to one
     measurement rather than open: with each mesh measured against its own

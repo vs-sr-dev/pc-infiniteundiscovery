@@ -88,7 +88,7 @@ KNOWN_TAGS = {
     "TTD-": "unknown",
     "RMD-": "message resource -- font atlas (AIF) plus text data",
     "WEAP": "weapon (identical set on both discs)",
-    "SKAC": "unknown, travels with skeletons",
+    "SKAC": "character animation bundle (nested)",
     "SEEK": "unknown, small and numerous -- seek table?",
     "MINI": "unknown, ~16 bytes each",
     "LNS-": "unknown, rare",

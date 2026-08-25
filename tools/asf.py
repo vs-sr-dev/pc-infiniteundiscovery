@@ -65,11 +65,12 @@ Both chunks are bare arrays of 16-bit numbers with no count of their own -- the
 chunk size gives it, rounded up to a multiple of four, so a pool with an odd
 number of entries has a trailing zero that is padding rather than node 0.
 
-The chain closes on the whole corpus: every `bnpi` entry lands inside its
+The chain closes on the whole corpus: every `bnpl` entry lands inside its own
+file's node tree (261 of 261 objects), every `bnpi` entry lands inside its
 object's pool (642 of 642 meshes) and every vertex bone index lands inside its
-mesh's `bnpi` (642 of 642). Some objects have a pool that overshoots the node
-tree, and every one of those is in a file with no `tree` chunk at all -- their
-skeleton is somewhere else.
+mesh's `bnpi` (642 of 642). There is no shared skeleton resource -- session 9
+thought there was, because 44 objects appeared to overshoot a tree that the
+reader was refusing to walk. See `Chunk._counted_children`.
 
 Geometry
 --------
@@ -274,9 +275,9 @@ class Chunk:
 
     def children(self):
         start = self._child_start()
-        if start is None:
-            return []
-        return list(walk(self.blob, start, self.end))
+        if start is not None:
+            return list(walk(self.blob, start, self.end))
+        return self._counted_children()
 
     def _child_start(self):
         """Offset where this chunk's children begin, or None if it has no tree.
@@ -289,6 +290,48 @@ class Chunk:
             if _tiles(self.blob, self.body + payload, self.end):
                 return self.body + payload
         return None
+
+    def _counted_children(self):
+        """Children of a `tree` that states its own count and has a tail.
+
+        A node graph puts its `attr` chunks at body+0xB0 and may follow them
+        with a block that is not chunks at all -- 86 of the 369 files in the
+        model corpus do, from 192 bytes to 3 600. That block makes the exact
+        tiling above fail, and reading it as "this file has no node tree" is
+        what hid ten character skeletons until session 12.
+
+        The count at body+0x00 is the number of nodes, and it agrees with the
+        run of `attr` chunks on all 369 trees, so the count is what to trust.
+        """
+        if self.tag != "tree" or self.end - self.body < TREE_NODES + 4:
+            return []
+        stated = struct.unpack_from(">I", self.blob, self.body + TREE_NODES)[0]
+        out, pos = [], self.body + TREE_CHILDREN
+        while len(out) < stated and self.end - pos >= HEADER:
+            if self.blob[pos:pos + 4] != b"attr":
+                break
+            size, _reserved, step = struct.unpack_from(">III", self.blob, pos + 4)
+            step = step or size
+            if step < HEADER or pos + step > self.end:
+                break
+            out.append(Chunk(self.blob, "attr", pos, size, step))
+            pos += step
+        return out if len(out) == stated else []
+
+    def tail(self):
+        """The bytes after this chunk's children, which are not themselves
+        chunks. Empty unless the children were found by count."""
+        kids = self.children()
+        if not kids:
+            return b""
+        after = kids[-1].offset + kids[-1].step
+        return bytes(self.blob[after:self.end])
+
+
+# A `tree` states its node count at body+0x00 and puts its `attr` chunks at
+# body+0xB0, on all 369 trees in the model corpus.
+TREE_NODES = 0x00
+TREE_CHILDREN = 0xB0
 
 
 def _tiles(blob, start, end):
@@ -1227,9 +1270,11 @@ def cmd_check(args):
         print("%-42s %.1f%% of %d vertices"
               % ("blend weights summing to one", 100.0 * weights_ok / weights, weights))
     if pools or palettes or skinned:
-        print("%-42s %d of %d objects (%d more in files with no tree)"
+        print("%-42s %d of %d objects%s"
               % ("bone pool inside the node tree", pools_ok, pools,
-                 pools_elsewhere))
+                 "" if not pools_elsewhere
+                 else " (%d more in files with no readable tree)"
+                 % pools_elsewhere))
         print("%-42s %d of %d meshes" % ("mesh palette inside the bone pool",
                                          palettes_ok, palettes))
         print("%-42s %d of %d meshes" % ("vertex bone index inside the palette",

@@ -90,6 +90,56 @@ The second is the opening logo sequence, camera included. `Capell` is the
 game's protagonist, so the first is his weapon set. Others carry Maya's default
 names — `pPlaneShape6`, `polySurfaceShape` — and one is `R:M:MORPH_BLINKS`.
 
+### 2.1 A tree that does not tile
+
+Chunks in an ASF are found by requiring that a parent's body **tiles exactly**
+into child chunks — a rule that is right almost everywhere and is what makes
+the chunk walk trustworthy. A `tree` breaks it. 86 of the 369 files in the
+model corpus put a block of **something that is not chunks at all** after the
+last `attr`, from 144 bytes to 3 600, and the exact-tiling test then rejects
+the whole node graph and reports the file as having none.
+
+The count is what to trust instead:
+
+* a `tree` states its node count in the first four bytes of its body;
+* its `attr` chunks begin at **body + 0xB0**;
+* they run for exactly that many chunks, on **all 369 trees**, and whatever
+  follows is the tail.
+
+Reading it that way takes the corpus from 283 files with a readable node graph
+to **369 of 369**, and 19 328 nodes to 23 979.
+
+The check that it is right comes from outside ASF entirely. An
+[AAF animation](aaf.md) names the nodes it drives and stores the constant value
+of every channel that never moves, and those constants should reproduce the
+rest pose in the `attr`. Before and after the fix, over the same 900
+animations:
+
+| | Names found in the scene's tree | Translations reproduced | Rotations | Scales |
+| --- | ---: | ---: | ---: | ---: |
+| Exact tiling only | 68 664 / 131 035 — 52.4 % | 61 805 / 62 104 — 99.5 % | 92.6 % | 99.6 % |
+| Counted children | **95 010 / 146 154 — 65.0 %** | **86 246 / 86 642 — 99.5 %** | 91.9 % | 99.5 % |
+
+**26 346 more animation channels come into the comparison and the agreement
+holds.** Ten of the newly-readable files are the game's playable characters,
+whose skeletons run to 315, 358, 559 and 581 nodes.
+
+### 2.2 The tail
+
+What follows the `attr` chunks is not yet read. It is present in 86 files, and
+two shapes turn up:
+
+* most begin with **four rows of four floats, each row ending in 1.0** —
+  homogeneous points that read as two centre-and-extent pairs — then a
+  `0x01010000` marker and more floats;
+* the largest character skeletons begin instead with a run of **32-byte
+  records**: a node index, five floats, and two more words. The node indices
+  name bones like `R:M:SK_A_LtHipFt` and `R:M:SK_A_LtBdySt` in chains, and the
+  floats read as damping and stiffness — `0.1, 1.0, 1.0, 0.01, 0.01` on one
+  chain, `0.1, 2.5, 1.0, 0.025, 0.002` on the next. `R:M:pColCube` names
+  appear alongside. That is hair and skirt simulation, and the engine has
+  `Aska::Dynamics` to run it.
+
 ## 3. Objects and their bounding boxes
 
 An `ao__` body opens with 0xA0 bytes of fixed fields. The first six 16-byte
@@ -221,14 +271,16 @@ The chain closes on the whole corpus:
 
 | | |
 | --- | --- |
-| every `bnpl` entry lands inside the node tree | 217 of 217 objects |
+| every `bnpl` entry lands inside the node tree | 261 of 261 objects |
 | every `bnpi` entry lands inside its object's pool | 642 of 642 meshes |
 | every vertex bone index lands inside its mesh's palette | 642 of 642 meshes |
 
-A further 44 objects have a pool that overshoots — and every one of them is in
-a **file with no `tree` chunk at all**. Their skeleton is somewhere else, which
-is the first concrete sign of a shared skeleton resource; `SKAC`, the tag the
-census already describes as travelling with skeletons, is the place to look.
+**This used to read 217 of 217, with a further 44 objects whose pool
+overshot.** Session 9 concluded from that that those 44 lived in files with no
+node tree and that their skeleton was in a shared resource. It was not: the
+tree was in the file all along, and the reader was refusing to walk it. See
+[§2.1](#21-a-tree-that-does-not-tile). Every skinned object in the corpus
+indexes its own file's node tree, and there is no shared skeleton.
 
 ```
 python tools/asf.py skeleton extract/models/53EC3800_000_MESH.asf

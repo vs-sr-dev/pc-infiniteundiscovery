@@ -155,7 +155,8 @@ Container offsets for the European release are tabulated in
   skinned vertex in the game. So are the materials: every mesh points at the
   one that shades it, and every material names its textures by the same key the
   texture header carries. Skinning too: a vertex's one-byte bone index runs
-  through the mesh's palette and the object's pool to a node in the tree.
+  through the mesh's palette and the object's pool to a node in the tree, on
+  all 261 skinned objects in the corpus.
 * [AAF](docs/formats/aaf.md) — the Aska Animation File: the most numerous
   resource on the disc. It animates an ASF's node tree, and its constant
   channels reproduce that tree's rest pose, which is what identifies them.
@@ -243,6 +244,18 @@ a link's stored edge is the polygon edge on both sides in 110 202 of 110 202
 cases, and a route's cost is the distance between two portal midpoints in all
 167 316. Checked from outside the format as well: 99.44 % of the object spawns
 in the scene script of the same archive land inside its nav mesh.
+
+Session 12 went looking for the shared skeleton resource session 9 had
+predicted and found there is none. The 44 objects whose bone pool appeared to
+overshoot were in files whose node tree the reader was refusing to walk: 86 of
+369 model files put a block that is not chunks after the last node, which
+defeats the exact-tiling rule the chunk walk relies on. Trusting the node count
+the tree states instead takes the corpus from 283 files with a readable node
+graph to 369 of 369, and every skinned object then indexes its own file's tree.
+The animation cross-check confirms it from outside: 26 346 more channels came
+into the rest-pose comparison and the agreement held at 99.5 %. The same
+session identified `SKAC` — a character's overflow animation bundle, binding to
+the model archive immediately before it in 13 of 15 cases.
 
 What remains is mostly meaning rather than structure — 246 of the 253 scene
 script opcodes are known by number, arity and operand kinds but not by what
