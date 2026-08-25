@@ -80,7 +80,15 @@ python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 22
 python tools/asf.py info      extract/models/000A4000_006_MESH.asf
 python tools/asf.py materials extract/models/000A4000_006_MESH.asf
 python tools/asf.py obj       extract/models/000A4000_006_MESH.asf sword.obj --textures
+python tools/asf.py skeleton  extract/models/53EC3800_000_MESH.asf
 python tools/asf.py check     extract/models/*.asf
+
+# Pull out the animations and check them against the scene they animate
+python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag ANIM --decompress --limit 900 extract/anim
+python tools/aaf.py tree  extract/anim/000A4000_008_ANIM.aaf
+python tools/aaf.py pose  extract/anim/000A4000_008_ANIM.aaf --time 40
+python tools/aaf.py check "extract/anim/*.aaf"
+python tools/aaf.py rest  "extract/anim/*.aaf" --models "extract/models/*.asf"
 
 # Walk the music, which sits between the archives rather than inside them
 python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
@@ -124,7 +132,12 @@ Container offsets for the European release are tabulated in
   within a degree of the geometry, and blend weights that sum to one on every
   skinned vertex in the game. So are the materials: every mesh points at the
   one that shades it, and every material names its textures by the same key the
-  texture header carries.
+  texture header carries. Skinning too: a vertex's one-byte bone index runs
+  through the mesh's palette and the object's pool to a node in the tree.
+* [AAF](docs/formats/aaf.md) — the Aska Animation File: the most numerous
+  resource on the disc. It animates an ASF's node tree, and its constant
+  channels reproduce that tree's rest pose, which is what identifies them.
+  Rotations are a 48-bit packed axis-and-angle quaternion.
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
@@ -158,9 +171,19 @@ meshes measured — and a material names its textures by the same eight bytes th
 texture's own header carries. A model now exports as an OBJ with materials and
 decoded PNGs.
 
-What remains is the `AAF ` animation and `ACF ` collision formats. Those are
-plain files sitting behind tools that work, rather than questions blocked on
-compression.
+Session 9 opened `AAF `, the animation format and the most numerous resource on
+the disc. All 900 payloads sampled parse and pass every internal check, and the
+constant channels reproduce the rest pose of the scene they animate — 99.5 % of
+translations, 92.6 % of rotations and 99.6 % of scales — which is what names
+the channels. Rotations are stored as a 48-bit axis-and-angle quaternion whose
+three fields are all angles measured as fractions of a right angle. The same
+session closed the bone chain in ASF: a vertex's one-byte bone index runs
+through `bnpi` and `bnpl` to a node in the `tree`, on every skinned mesh in the
+corpus.
+
+What remains is `ACF ` collision, and the scene scripting behind `SCE-`. Those
+are plain files sitting behind tools that work, rather than questions blocked
+on compression.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.

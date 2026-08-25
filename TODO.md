@@ -6,27 +6,32 @@ view, kept current at the end of every session.
 
 Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 
-**Start here next time: question 1.** `AAF ` animation is the largest format
-left that nobody has opened, and after session 8 a model is complete apart from
-moving: geometry, skinning weights, bone indices, materials and textures all
-decode. The bone pool the weights index into (`bnpl` / `bnpi`, question 3) is
-part of the same problem and worth reading first — it is two small chunks, and
-an animation has to address bones the same way a vertex does.
+**Start here next time: question 1.** `ACF ` collision is now the largest
+format nobody has opened, and it has a head start: the engine's RTTI names its
+primitives. Question 2, the scene scripting, is the other candidate — after
+session 9 a model has geometry, materials, textures, a skeleton and animation,
+so what is missing is what *drives* them.
 
 ## Now the main line of work
 
-**1. `AAF ` animation and `ACF ` collision.** Both are plain readable files.
-The engine's RTTI already names the collision primitives — capsule, cube and
-sphere, via `Aska::AcfPrimitiveData_capsule` / `_cube` / `_sphere` — so ACF has
-a head start.
+**1. `ACF ` collision.** A plain readable file. The engine's RTTI already names
+the primitives — capsule, cube and sphere, via `Aska::AcfPrimitiveData_capsule`
+/ `_cube` / `_sphere`.
 
 **2. `-CNS` / `SNC-` scene data**, from `SCE-` resources. Only four blocks, but
 scene scripting is likely to explain a lot of the rest.
 
-**3. The ASF chunks nobody has opened:** `bnpl`/`bnpi` (bone pools — the vertex
-bone indices decode, but what they index into has not been read),
-`ptcl`/`pprn`/`pani` (particles), and `modf`, `extl`, `PAIF`, `AAIF`, `ACHF`,
-`glbl`, `mdfr`, `anim`.
+**3. The ASF chunks nobody has opened:** `ptcl`/`pprn`/`pani` (particles), and
+`modf`, `extl`, `PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr`, `anim`. `bnpl`/`bnpi`
+are no longer among them — session 9 read them, and they are the middle of the
+chain from a vertex's bone byte to a node of the `tree`.
+
+**3b. Where a `tree`-less scene keeps its skeleton.** 44 objects in the model
+corpus have a bone pool that overshoots their own file's node count, and every
+one of them sits in a file with no `tree` chunk at all. `SKAC`, which the
+census already describes as travelling with skeletons, is the place to look —
+and it would also say what an animation binds to when the scene has no tree of
+its own.
 
 **4. The material leftovers**, small and self-contained after session 8: the
 two fields in a texture reference at `+0x08` and `+0x0C`, neither of which
@@ -39,6 +44,13 @@ material's header and its binding table; the 48-byte records counted at
 box** by more than 10 %. They are mostly treasure chests and morph targets —
 things whose geometry moves — which suggests the box describes a pose the
 stored vertices are not in.
+
+**4b. The AAF leftovers**, small and self-contained after session 9: the word
+at `+0x20` which is larger than the file; the three floats at `+0x14` of an
+animated track, which look like a time window; the units of time; the channel
+numbers other than 5, 6 and 7 — 14, 16, 18, 22, 45 and more, on lights,
+emitters and cameras — and the semantic byte at track `+0x12`; and the `0x0200`
+that some tracks put in the high half of their size word.
 
 ## Smaller and self-contained
 
@@ -104,5 +116,6 @@ stored vertices are not in.
 * XDBF title metadata — [docs/formats/xdbf.md](docs/formats/xdbf.md)
 * SLZ / XCompress — [docs/formats/slz.md](docs/formats/slz.md)
 * AIF textures — [docs/formats/aif.md](docs/formats/aif.md)
-* ASF scenes: container, geometry and materials — [docs/formats/asf.md](docs/formats/asf.md)
+* ASF scenes: container, geometry, materials and skinning — [docs/formats/asf.md](docs/formats/asf.md)
+* AAF animation — [docs/formats/aaf.md](docs/formats/aaf.md)
 * AAC audio, and where the music lives — [docs/formats/aac.md](docs/formats/aac.md)

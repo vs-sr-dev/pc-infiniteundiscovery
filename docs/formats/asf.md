@@ -58,9 +58,9 @@ ASF                    the file
   ao__                 one object: its bounds, then everything it needs
     AIF                an embedded texture, in the AIF format
     ml__ / mats        materials
-    bnpl               bone pool
+    bnpl               bone pool: node numbers
     mess               one mesh
-      bnpi             bone pool indices
+      bnpi             this mesh's slice of the pool
       idxl             triangle indices
       vlas             vertices
     rl__ / rnel        the shading network
@@ -196,6 +196,43 @@ Four blend weights as unsigned 16-bit values, then four bone indices as single
 bytes. **The weights sum to 65535 on 100.0 % of 2 919 607 skinned vertices** —
 which is the cleanest single confirmation in this document, because a wrong
 offset or a wrong width breaks it immediately.
+
+### The bone pool: what a vertex's bone index means
+
+Those four bytes are not node numbers. They are the bottom of a three-level
+chain, and the two chunks that had never been read are the middle of it:
+
+```
+vertex bone byte  ->  mess/bnpi  ->  ao__/bnpl  ->  tree/attr
+```
+
+`bnpi` is the mesh's own bone palette and `bnpl` is the object's bone pool.
+Both are bare arrays of big-endian 16-bit numbers with no count of their own:
+the chunk's content size gives it, rounded up to a multiple of four, so a pool
+with an odd number of entries ends in a zero that is padding rather than node
+0. The largest pool in the corpus holds 168 entries and the largest palette 98.
+
+The point of the middle level is the byte at the bottom. One byte addresses
+256 bones; a file like `53EC3800` has 367 nodes and one object using 168 of
+them, and no single mesh in it uses more than 98. The palette is what lets the
+vertex stay a byte wide.
+
+The chain closes on the whole corpus:
+
+| | |
+| --- | --- |
+| every `bnpl` entry lands inside the node tree | 217 of 217 objects |
+| every `bnpi` entry lands inside its object's pool | 642 of 642 meshes |
+| every vertex bone index lands inside its mesh's palette | 642 of 642 meshes |
+
+A further 44 objects have a pool that overshoots — and every one of them is in
+a **file with no `tree` chunk at all**. Their skeleton is somewhere else, which
+is the first concrete sign of a shared skeleton resource; `SKAC`, the tag the
+census already describes as travelling with skeletons, is the place to look.
+
+```
+python tools/asf.py skeleton extract/models/53EC3800_000_MESH.asf
+```
 
 ### The colour
 

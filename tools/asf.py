@@ -52,6 +52,25 @@ sits in, so a texture extracted out of an ASF needs the offset it came from.
       modf / extl            small, unexamined
       eof_                   end marker
 
+Skinning and the bone pool
+--------------------------
+A skinned vertex carries four blend weights and four one-byte bone indices,
+and those indices are not node numbers. They index the mesh's own `bnpi`, a
+list of 16-bit numbers; those index the object's `bnpl`; and `bnpl` holds node
+numbers into the file's `tree`. Three levels, so that a mesh can address at
+most 256 bones with a single byte each while the file as a whole carries
+hundreds.
+
+Both chunks are bare arrays of 16-bit numbers with no count of their own -- the
+chunk size gives it, rounded up to a multiple of four, so a pool with an odd
+number of entries has a trailing zero that is padding rather than node 0.
+
+The chain closes on the whole corpus: every `bnpi` entry lands inside its
+object's pool (642 of 642 meshes) and every vertex bone index lands inside its
+mesh's `bnpi` (642 of 642). Some objects have a pool that overshoots the node
+tree, and every one of those is in a file with no `tree` chunk at all -- their
+skeleton is somewhere else.
+
 Geometry
 --------
 `mess` opens with two 16-bit counts: vertices, then indices. Both `idxl` and
@@ -429,6 +448,7 @@ class Mesh:
         self.weights = []
         self.bones = []
         self.indices = []
+        self.bone_indices = []
         self.stride = 0
         self.descriptor = 0
         self.format = None
@@ -442,6 +462,12 @@ class Mesh:
         for child in chunk.children():
             if child.tag == "vlas" and self.vertex_count:
                 self._read_vertices(child)
+            elif child.tag == "bnpi":
+                # A vertex's bone byte indexes this list, and this list indexes
+                # the object's `bnpl`, which indexes the file's node tree.
+                count = (child.size - HEADER) // 2
+                self.bone_indices = list(struct.unpack_from(
+                    ">%dH" % count, chunk.blob, child.offset + HEADER))
             elif child.tag == "idxl" and self.index_count:
                 offset = child.u32(0x00)
                 self.indices = list(struct.unpack_from(
@@ -678,12 +704,17 @@ class Object3D:
         self.axes = [chunk.floats(0x20 + i * 0x10, 3) for i in range(3)]
         self.extents = chunk.floats(0x50, 3)
         self.name = chunk.name(0x80)
+        self.bone_pool = []
         self.meshes = []
         self.textures = []
         self.material_lists = []
         self.render_nodes = []
         for child in chunk.children():
-            if child.tag == "mess":
+            if child.tag == "bnpl":
+                count = (child.size - HEADER) // 2
+                self.bone_pool = list(struct.unpack_from(
+                    ">%dH" % count, chunk.blob, child.offset + HEADER))
+            elif child.tag == "mess":
                 self.meshes.append(Mesh(child))
             elif child.tag == "AIF ":
                 self.textures.append(child)
@@ -1097,6 +1128,28 @@ def mesh_agreement(mesh):
     return out
 
 
+def cmd_skeleton(args):
+    """The bone chain: a vertex names a palette slot, which names a node."""
+    asf = load(args.file)
+    names = list(asf.nodes())
+    print("%d nodes in the tree" % len(names))
+    for obj in asf.objects:
+        if not obj.bone_pool and not any(m.bone_indices for m in obj.meshes):
+            continue
+        print("object %r: pool of %d" % (obj.name, len(obj.bone_pool)))
+        for i, node in enumerate(obj.bone_pool[:args.limit]):
+            label = names[node] if node < len(names) else "<outside this file>"
+            print("   pool[%3d] -> node %3d  %s" % (i, node, label))
+        for j, mesh in enumerate(obj.meshes):
+            if not mesh.bone_indices:
+                continue
+            shown = ", ".join(str(v) for v in mesh.bone_indices[:12])
+            print("   mesh %d palette of %d: %s%s"
+                  % (j, len(mesh.bone_indices), shown,
+                     " ..." if len(mesh.bone_indices) > 12 else ""))
+    return 0
+
+
 def cmd_check(args):
     """Measure the vertex decode over as many files as are given."""
     totals = {"unit": [], "normal": [], "perpendicular": [], "binormal": []}
@@ -1104,6 +1157,8 @@ def cmd_check(args):
     unknown = {}
     padded = failed = 0
     materials = tiled = linked = agreed = refs = refs_here = 0
+    pools = pools_ok = palettes = palettes_ok = skinned = skinned_ok = 0
+    pools_elsewhere = 0
     for path in args.files:
         try:
             asf = load(path)
@@ -1115,8 +1170,22 @@ def cmd_check(args):
         refs_here += sum(1 for m in asf.materials.values() for r in m.textures
                          if asf.texture_of(r) is not None)
         tiled += _materials_tile(asf)
+        node_count = len(list(asf.nodes()))
         for obj in asf.objects:
+            if obj.bone_pool and node_count:
+                pools += 1
+                pools_ok += max(obj.bone_pool) < node_count
+            elif obj.bone_pool:
+                pools_elsewhere += 1
             for mesh in obj.meshes:
+                if mesh.bone_indices and obj.bone_pool:
+                    palettes += 1
+                    palettes_ok += max(mesh.bone_indices) < len(obj.bone_pool)
+                if mesh.bones and mesh.bone_indices:
+                    used = max(b for bones, w in zip(mesh.bones, mesh.weights)
+                               for b, weight in zip(bones, w) if weight > 0)
+                    skinned += 1
+                    skinned_ok += used < len(mesh.bone_indices)
                 material = asf.material_of(mesh)
                 if material is not None:
                     linked += 1
@@ -1157,6 +1226,14 @@ def cmd_check(args):
     if weights:
         print("%-42s %.1f%% of %d vertices"
               % ("blend weights summing to one", 100.0 * weights_ok / weights, weights))
+    if pools or palettes or skinned:
+        print("%-42s %d of %d objects (%d more in files with no tree)"
+              % ("bone pool inside the node tree", pools_ok, pools,
+                 pools_elsewhere))
+        print("%-42s %d of %d meshes" % ("mesh palette inside the bone pool",
+                                         palettes_ok, palettes))
+        print("%-42s %d of %d meshes" % ("vertex bone index inside the palette",
+                                         skinned_ok, skinned))
     if materials:
         print("%-42s %d, %d laid out end to end" % ("materials", materials, tiled))
         print("%-42s %d meshes, %d agree on texture coordinates"
@@ -1209,6 +1286,12 @@ def main(argv=None):
                        help="what shades what: meshes, materials and textures")
     s.add_argument("file")
     s.set_defaults(func=cmd_materials)
+
+    s = sub.add_parser("skeleton",
+                       help="print the bone pool and each mesh's bone palette")
+    s.add_argument("file")
+    s.add_argument("--limit", type=int, default=24)
+    s.set_defaults(func=cmd_skeleton)
 
     s = sub.add_parser("check", help="measure the vertex decode against the geometry")
     s.add_argument("files", nargs="+")
