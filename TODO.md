@@ -6,11 +6,12 @@ view, kept current at the end of every session.
 
 Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 
-**Start here next time: question 1.** After session 10 the whole chain from a
-disc image to a moving, textured, scripted scene is readable as *structure*.
-What is thin now is *meaning* — 246 of the 253 scene-script opcodes are known
-only by number — and the two resources that travel beside a scene, `NODE` and
-`SKAC`, are still unopened.
+**Start here next time: question 1.** After session 11 a scene is readable as
+*structure* from every side — geometry, materials, textures, skeleton,
+animation, collision, the script that drives it and the navigation mesh the AI
+walks on. What is thin is *meaning*: 246 of the 253 scene-script opcodes are
+known only by number. `SKAC` is the one resource beside a scene still
+unopened.
 
 ## Now the main line of work
 
@@ -23,47 +24,47 @@ Related, and smaller: the header word at `+0x08`, which matches no count in the
 file; the reference spaces `e`, `c`, `k`, `s`, `i`, `u`, `v`, `r`, `g`; what
 `m` is; and the five-digit identifier that ends the spawn commands.
 
-**2. `NODE` payloads**, which travel beside every `SCE-` in the same archive
-and carry no magic at all. Session 10 looked far enough to see that they are
-not scripts: an id, a table of offsets, then floats that read as world bounds
-(±5 200). A spatial partition is the obvious guess. Solving this and question 1
-together would finish the scene.
-
-**3. Where a `tree`-less scene keeps its skeleton.** 44 objects in the model
+**2. Where a `tree`-less scene keeps its skeleton.** 44 objects in the model
 corpus have a bone pool that overshoots their own file's node count, and every
 one of them sits in a file with no `tree` chunk at all. `SKAC`, which the
 census already describes as travelling with skeletons, is the place to look —
 and it would also say what an animation binds to when the scene has no tree of
 its own, and what a collision file's bone names resolve against.
 
-**4. The ASF chunks nobody has opened:** `ptcl`/`pprn`/`pani` (particles), and
+**3. The ASF chunks nobody has opened:** `ptcl`/`pprn`/`pani` (particles), and
 `modf`, `extl`, `PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr`, `anim`.
 
-**5. The material leftovers**, small and self-contained after session 8: the
+**4. The material leftovers**, small and self-contained after session 8: the
 two fields in a texture reference at `+0x08` and `+0x0C`, neither of which
 separates a colour map from a normal map; the shader program block between a
 material's header and its binding table; the 48-byte records counted at
 `mats +0x19`, which look like a UV transform; and the four-byte entries in an
 `rnel`, presumably how the shading nodes connect.
 
-**6. The AAF leftovers**, small and self-contained after session 9: the word
+**5. The AAF leftovers**, small and self-contained after session 9: the word
 at `+0x20` which is larger than the file; the three floats at `+0x14` of an
 animated track, which look like a time window; the units of time; the channel
 numbers other than 5, 6 and 7 — 14, 16, 18, 22, 45 and more, on lights,
 emitters and cameras — and the semantic byte at track `+0x12`; and the `0x0200`
 that some tracks put in the high half of their size word.
 
-**7. The ACF leftovers**, smaller still: the `u16` at primitive `+0x28`, which
+**6. The ACF leftovers**, smaller still: the `u16` at primitive `+0x28`, which
 is a permutation of `0 .. n-1` in 460 files and something else in 512; which
 bit of the 16-bit collision mask means what; and `+0x2C`, which is exactly the
 root sphere seen from the origin on 463 of 972 files and at least that on 779.
 
-**8. The 59 ASF objects in 3 855 whose geometry misses their stated bounding
+**7. The 59 ASF objects in 3 855 whose geometry misses their stated bounding
 box** by more than 10 %. They are mostly treasure chests and morph targets —
 things whose geometry moves — which suggests the box describes a pose the
 stored vertices are not in.
 
 ## Smaller and self-contained
+
+8. **The NODE leftovers**, small and self-contained after session 11: the low
+   byte of a node's own reference, which is not the partition index, the link
+   count, the vertex count or the number of cross-partition links; the values
+   in a gate group's slot list; the trailing table at header `+0x28`; and the
+   802 nodes whose polygon has only two vertices.
 
 9. **AIF mip chains.** The base level decodes. The Xbox 360 packs the small mip
    levels into a shared tile, and working that out would complete the texture
@@ -71,8 +72,8 @@ stored vertices are not in.
 
 10. **The AIF flags at `0x34`** (`0x500`, `0x200`, `0x40400`, zero).
 
-11. **`TTD-`**, whose payload begins `DTT\0`. `NODE`, which used to share this
-    entry, is now question 2.
+11. **`TTD-`**, whose payload begins `DTT\0`. It is the last resource tag
+    on the disc with no reading at all.
 
 12. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
     the rest of that `0x16000` header as the compiled shader library, 70 of the
@@ -130,4 +131,5 @@ stored vertices are not in.
 * AAF animation — [docs/formats/aaf.md](docs/formats/aaf.md)
 * ACF collision — [docs/formats/acf.md](docs/formats/acf.md)
 * SNC scene scripts: container and instruction encoding — [docs/formats/snc.md](docs/formats/snc.md)
+* NODE, the AI node field — [docs/formats/node.md](docs/formats/node.md)
 * AAC audio, and where the music lives — [docs/formats/aac.md](docs/formats/aac.md)

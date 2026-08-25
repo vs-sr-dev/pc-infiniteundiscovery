@@ -213,10 +213,11 @@ points — 46 of the 61 files have none at all.
   probably a global asset table.
 * **What `m` is.** It is allocated like `h` but from 1, lives only in the data
   section, and always comes two to a block.
-* **`NODE`**, which travels beside every `SCE-` in the same archive. Its
-  payload has no magic and is not a script; it opens with an id and a table of
-  offsets and holds floats that look like world-space bounds (±5200), so it is
-  probably the scene's spatial partition. Still question 10.
+* **`NODE`** is no longer among these. It travels beside every `SCE-` in the
+  same archive, and [session 11](../sessions/session-11.md) showed it is the
+  navigation mesh the AI walks on — see [node.md](node.md). It also gave this
+  format a check from outside: 99.44 % of the positions a script spawns objects
+  at fall inside its own scene's nav mesh.
 
 ## 8. Reproducing
 

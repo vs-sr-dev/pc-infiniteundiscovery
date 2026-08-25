@@ -59,6 +59,7 @@ docs/sessions/ chronological work log
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
 | `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
+| `tools/node.py` | Read the NODE payload, the ASKA AI node field: the navigation-mesh polygons and what they connect to, the portal links with their precomputed route costs, the spatial partitions, an OBJ export of a map's walkable floor, and a corpus check. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
@@ -103,6 +104,13 @@ python tools/snc.py info    extract/scene/4F0A3000_041_SCE.bin
 python tools/snc.py strings extract/scene/4F0A3000_041_SCE.bin
 python tools/snc.py dis     extract/scene/4F0A3000_041_SCE.bin --limit 40 --blocks
 python tools/snc.py check   extract/scene/*.bin
+
+# Pull out the navigation meshes and export a map's walkable floor
+python tools/mron.py extract "path/to/disc1.iso" --offset 3919380480 --length 2800330752 --tag NODE --decompress extract/scene
+python tools/node.py info  extract/scene/17C48000_005_NODE.bin
+python tools/node.py links extract/scene/17C48000_005_NODE.bin --limit 5
+python tools/node.py obj   extract/scene/17C48000_005_NODE.bin navmesh.obj --portals
+python tools/node.py check extract/scene/*NODE*.bin
 
 # Walk the music, which sits between the archives rather than inside them
 python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
@@ -163,6 +171,11 @@ Container offsets for the European release are tabulated in
   opcodes has exactly one operand count. Seven opcodes are identified from the
   Maya node names they are given and from a quaternion that is a unit
   quaternion 987 times out of 990.
+* [NODE](docs/formats/node.md) — the AI node field: a navigation mesh over the
+  walkable floor of every map, with portal links, precomputed A* costs and
+  doors. Solved: all 61 payloads parse, a link's stored edge is exactly the
+  polygon edge on both sides in 110 202 of 110 202 cases, and a route's cost is
+  exactly the distance between two portal midpoints in all 167 316.
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
@@ -221,8 +234,19 @@ names the tagged eight-byte operand the format is built from — `sce::Var`.
 Seven opcodes are identified: what a scene spawns, where it stands, which bone
 it hangs off, and which light and shadow belong to it.
 
-What remains is mostly meaning rather than structure — 246 of the 253 opcodes
-are known by number, arity and operand kinds but not by what they do.
+Session 11 opened `NODE`, the resource that travels beside every `SCE-` script
+and had carried no magic and no explanation since session 3. It is the
+navigation mesh: the walkable floor of a map as convex polygons, the portals
+between them, and the A* cost of every crossing precomputed. All 61 payloads
+parse, and the two numbers the format states redundantly come back exactly —
+a link's stored edge is the polygon edge on both sides in 110 202 of 110 202
+cases, and a route's cost is the distance between two portal midpoints in all
+167 316. Checked from outside the format as well: 99.44 % of the object spawns
+in the scene script of the same archive land inside its nav mesh.
+
+What remains is mostly meaning rather than structure — 246 of the 253 scene
+script opcodes are known by number, arity and operand kinds but not by what
+they do.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.

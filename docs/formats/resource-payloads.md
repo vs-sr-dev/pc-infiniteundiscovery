@@ -28,7 +28,7 @@ once.
 | `MINI` | `INIM00.1` | `MINI` version 1.00 |
 | `SIG-` | `-GIS00.1` | `SIG-` version 1.00 |
 | `TTD-` | `DTT\0` | unidentified |
-| `NODE` | — | no magic, raw data — travels beside `SCE-` |
+| `NODE` | `0x0131F119` | [the AI node field](node.md) — a navigation mesh; no ASCII magic |
 
 ## The `A?F` family
 
@@ -97,6 +97,11 @@ INIM00.1  ->  MINI  1.00
 -CNS00.3  ->  SNC-  3.00
 MRON00.2  ->  NORM  2.00
 ```
+
+`NODE` is the one payload with no magic of any kind. It opens with the
+constant `0x0131F119`, and [session 11](../sessions/session-11.md) showed it is
+the navigation mesh belonging to the `SCE-` script in the same archive — the
+two always appear together, one for one. See [node.md](node.md).
 
 `SNC-` is the odd one: it comes from a `SCE-` resource, and the two names are
 close enough to be the same concept ("scene") under two spellings. That is now
