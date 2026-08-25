@@ -15,16 +15,23 @@ walks on — and every skinned object indexes its own file's node tree, so there
 is no shared skeleton to find. What is thin is *meaning*: 246 of the 253
 scene-script opcodes are known only by number.
 
-There is now a second front as well, which does not compete with question 1 for
-the same kind of work: testing whether the engine turns up in tri-Ace's other
-titles. It is waiting on material rather than on ideas, and the tooling for the
-first rung of it is already written.
+Session 13 answered the second front — the engine **is** in tri-Ace's other
+titles, and [docs/aska-across-titles.md](docs/aska-across-titles.md) is the
+result. It also closed off one route to question 1 that looked promising:
+Star Ocean 4's scene scripts parse with the same reader, but its opcode
+*numbering* is a different table, so a second title cannot name Infinite
+Undiscovery's opcodes.
 
 ## Now the main line of work
 
-**1. What the SNC opcodes do.** The scene script parses completely and seven
-of its 253 opcodes are identified. The rest are known by number, arity and
-operand kinds. Two footholds: the 19 opcodes whose signature ends `@@nn`
+**1. What the SNC opcodes do.** This has to be answered inside this game:
+session 13 measured Star Ocean 4's scripts, which use the identical container
+version `-CNS00.3` and the identical instruction encoding, and found that of
+the 77 opcode numbers common to both titles only 15 keep an operand signature
+this game also writes. The number is an index into a per-title function table.
+
+The scene script parses completely and seven of its 253 opcodes are
+identified. The rest are known by number, arity and operand kinds. Two footholds: the 19 opcodes whose signature ends `@@nn`
 demonstrably share a trailing structure — 88 690 instructions of 420 532 — and
 `0133`, which puts two quaternions in front of that tail, is a rotation tween.
 Related, and smaller: the header word at `+0x08`, which matches no count in the
@@ -90,9 +97,14 @@ stored vertices are not in.
 
 13. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
     the rest of that `0x16000` header as the compiled shader library, 70 of the
-    160 shaders in the container. What is left is a per-disc table with a
-    `0x100`-byte period, holding no pointers, 51 % of whose blocks are shared
-    between the two discs.
+    160 shaders in the container. What is left is a table with a `0x100`-byte
+    period, holding no pointers. Session 13 found its first `0x2800` bytes in
+    **Star Ocean 4** as well and read the shape off the comparison: 40 rows of
+    64 words, where the **top half of each word is the same in both games** on
+    99.5 % of 2 560 words and the bottom half is per-title and per-disc. So it
+    is a record of 64 (key, value) pairs and the keys belong to the engine, not
+    to the game. What the keys select is open, as are the four columns whose
+    top halves vary down the rows — identically in both games.
 
 14. **The ASF/WMV video runs** in the container gaps — they need splitting into
     individual movies.
@@ -132,117 +144,67 @@ stored vertices are not in.
     1.89 against 5.03 rotated, over 251 914 triangles. Only an actual render
     would close it.
 
-## Beyond this game — is ASKA in other titles?
+## Beyond this game — answered, and what it left open
 
-Everything above is about one disc. This is the one open question that is not:
-**does the ASKA engine appear in tri-Ace's other titles, and does enough of it
-survive to be readable with the tools here?**
+**Yes: the engine is in all four of the titles that were tested**, and the
+argument, the measurements and the ladder as it actually played out are in
+[docs/aska-across-titles.md](docs/aska-across-titles.md). Star Ocean 4 is
+settled by `Aska::` in its executable and then by every reader here parsing its
+payloads; Resonance of Fate by AIF headers and the `SLZ` token in its
+executable; Star Ocean 5 by `SLZ` blocks whose walk closes exactly, inside the
+CPK archives of its PSN package; Star Ocean: Anamnesis on Android by 46 507
+mangled `Aska` symbols in its native library and an asset file named
+`aska0000.bin`.
 
-It is worth doing for two reasons. It would be the first result in this
-repository useful to someone who is not working on *this* game. And if a later
-title carries the same formats with the version digits bumped, the **difference
-between two revisions** is often what explains the fields a single revision
-leaves opaque — several of the questions above are the kind that a second
-specimen would answer for free.
+The questions that came out of it, none of which is about this disc:
 
-### The specimens
+21. **Star Ocean 5's payload envelope.** 1 886 sound `ASF ` headers and 3 740
+    sound `AIF ` ones in the decrypted package, and not one opens: no `ao__` at
+    `0x20`, no `imgX` at `0x10`. Something sits between the magic and the
+    chunks, and 58 of 613 sampled headers carry the tag `PS3 `.
 
-| Title | Year | Platform | Why |
-| --- | --- | --- | --- |
-| Star Ocean: The Last Hope | 2009 | Xbox 360 | One year on, same platform |
-| Resonance of Fate | 2010 | Xbox 360 | Two years on, same platform |
-| Star Ocean: Integrity and Faithlessness | 2016 | PS3 (JP) | Eight years on, still big-endian |
+22. **The compressed methods in Star Ocean 5's `SLZ`.** Byte `0x03` selects
+    one of three; method 0, stored, is readable and the rest are not. Not
+    XCompress and not plain LZSS.
 
-Three points on the Xbox 360 hold the **platform constant and vary the year**,
-which isolates version drift. The PS3 build of Star Ocean 5 is chosen over the
-PS4 one deliberately: PowerPC is big-endian like the Xbox 360, so its formats
-would be comparable byte for byte and the readers here would need no changes.
-On PS4 everything is byte-swapped and a difference could not be told apart from
-a change of byte order.
+23. **Resonance of Fate's container.** The executable proves the engine and the
+    disc shows nothing at all — every signature with a structural test scores
+    zero sound, and both containers are entropy 8.00 everywhere sampled.
 
-Disc 1 alone is enough for a three-disc release: the executable is on it, and
-so is a full slice of every resource type.
+24. **Star Ocean 4's container.** Not one versioned tag on the whole disc, and
+    yet thousands of payloads behind `SLZ`. Something indexes them without
+    announcing itself the way `MRON` does.
 
-### The ladder, cheapest first
+25. **`EXD\0`, `mcd `, `MMD `** — three resource magics in Star Ocean 4's data
+    with no reading here. `EXD\0` is the commonest payload in the sample.
 
-1. **`python tools/aska.py identify <image>`** — sweeps any file for eighteen
-   ASKA signatures in one pass. Built in session 12; see its docstring for what
-   it looks for and why those particular things.
-2. **`tools/xdvdfs.py list`** to find the containers, then `tools/mron.py scan`
-   at their offsets.
-3. **`tools/xex.py extract`** then `tools/rtti.py` on the executable. `Aska::`
-   in the RTTI settles it outright.
-4. **The one that is worth more than a `grep`: make the readers parse it.**
-   Every tool here has hard self-checks — a chunk walk that must land exactly
-   on the end, stated counts that must match, opcodes that must have one arity.
-   "The ASF of that game parses and passes its checks" is an order of magnitude
-   stronger than "the magic matches".
+Two notes for anyone extending this to a fourth title. The **tests are
+asymmetric**: a hit on a versioned magic or on the engine namespace is
+conclusive, while a miss proves very little — Resonance of Fate is the worked
+example of a title that is certainly ASKA and shows nothing on its disc. And
+the **RTTI rung is closed**, more thoroughly than expected: neither Xbox 360
+title ships RTTI at all, and a PlayStation executable is encrypted behind
+NPDRM. What replaced it was plain strings in the binary.
 
-### The baseline to compare against
+26. **The mobile class inventory.** `libSOA.so` carries 26 378 mangled `Aska`
+    symbols resolving to 5 960 distinct two-level names — methods and members,
+    not only classes, against the 1 740 class names session 1 recovered here.
+    The `Aska::TAaf…Controller` family alone names the animation machinery
+    [docs/formats/aaf.md](docs/formats/aaf.md) decoded from the outside.
+    Reading it properly needs an Itanium demangler, which `tools/rtti.py` is
+    not.
 
-Infinite Undiscovery disc 1, swept with `aska.py identify` — the numbers the
-other titles get read against. `sound` is the subset whose following field has
-a plausible shape; a bare four-byte magic turns up by chance about once per
-four gigabytes, so for the signatures that have a test it is the only column
-worth reading.
-
-| Signature | Hits | Sound | Version |
-| --- | ---: | ---: | --- |
-| MRON container | 6 873 | 6 261 | `MRON00.2` |
-| SNC scene script | 7 | | `-CNS00.3` |
-| AREA | 94 | | `AERA00.4` |
-| MINI | 44 | | `INIM00.1` |
-| SIG- signal | 2 909 | | `-GIS00.1` |
-| ASF scene | 1 454 | 1 450 | |
-| AAF animation | 6 763 | | |
-| ACF collision | 1 314 | | |
-| AIF image | 3 321 | 3 320 | |
-| AAC audio | 9 080 | | |
-| SLZ wrapper | 8 104 | 8 082 | |
-| AI node field | 33 | 33 | |
-| `R:M:` node prefix | 877 638 | | |
-| pCol primitives | 10 357 | | |
-| `Tri_ace` node | 1 | | |
-
-A whole 7.8 GiB image takes about 35 minutes. The cost is the matching, not
-the reading, so a faster disc does not help.
-
-Three of those rows are worth knowing about before reading someone else's:
-
-* **`-CNS00.3` shows 7, not the 44 `SCE-` resources on the disc**, because the
-  other 37 are SLZ-compressed and their magic is not visible. Seven is exactly
-  the number of *stored* `SCE-` payloads session 10 counted, by a different
-  route.
-* **`AI node field` shows 33, not 44**, for the same reason, and chasing that
-  gap is what turned up the fact that `NODE` is compressed only sometimes —
-  33 stored, 11 behind `SLZ`. A count that does not match is worth following.
-* **`Tri_ace` appears exactly once** on the whole disc, in the opening logo
-  scene. If it appears in another title at all, that is the studio's own
-  fingerprint rather than the engine's.
-
-### Two things to know before starting
-
-**The tests are asymmetric.** A hit on a versioned magic or on the engine
-namespace is conclusive — a byte-reversed FourCC with an ASCII version stapled
-on is not something another studio arrives at by coincidence. **A miss proves
-very little:** a studio can change its container and keep its scene format, and
-the platform layer — texture tiling, audio codec, compression — is expected to
-differ on anything that is not an Xbox 360.
-
-**Two known gaps in the tooling**, neither large:
-
-* `tools/xex.py` implements the XEX "basic" compression scheme, not "normal"
-  (LZX). Infinite Undiscovery used basic. A title that used LZX would need
-  `tools/lzx.py`, already written for XCompress, wired in — an hour, not a
-  session.
-* `tools/rtti.py` reads MSVC RTTI. A PlayStation build is Clang or GCC, whose
-  Itanium-ABI names are length-prefixed (`Aska` appears as `4Aska`).
-  `aska.py` already looks for both manglings, so the *conclusive test* works;
-  recovering a full class inventory the way session 1 did would need a
-  different demangler.
+The remaining candidates all sit on little-endian hardware — Star Ocean 6 on
+x86, a PlayStation Vita title, anything else on mobile. `aska.py` now looks for
+the payload magics and `SLZ` both ways round, because Anamnesis showed that a
+FourCC stored as a 32-bit word *does* flip while the ASCII names do not. Every
+`struct` format string in the readers still assumes big-endian, so opening a
+little-endian title's payloads is a separate piece of work.
 
 ## Verified, needs no further work
 
+* The engine in tri-Ace's other titles — [docs/aska-across-titles.md](docs/aska-across-titles.md)
+* PlayStation 3 packages — [docs/formats/pkg.md](docs/formats/pkg.md)
 * Disc layout and XDVDFS — [docs/formats/xdvdfs.md](docs/formats/xdvdfs.md)
 * NORM/MRON containers — [docs/formats/norm-mron.md](docs/formats/norm-mron.md)
 * XEX2 and the decrypted executable — [docs/formats/xex.md](docs/formats/xex.md)

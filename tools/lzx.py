@@ -58,6 +58,10 @@ Usage
     for data, length in frames:          # 32 KB each, the last one shorter
         dec.decode_frame(data, length, out)
     dec.reset()                          # only where the stream restarts
+
+or, where the frames are not delimited and simply follow one another:
+
+    out = LzxDecoder(window_bits=15).decode_stream(data, uncompressed_size)
 """
 
 from __future__ import annotations
@@ -431,6 +435,42 @@ class LzxDecoder:
 
             self.block_remaining -= produced
 
+        # How much of `data` this frame consumed. A caller whose frames are
+        # separately delimited does not need it; `decode_stream` does, because
+        # there the frames are laid end to end and only this says where the
+        # next one starts.
+        if self._raw is not None:
+            self.frame_input_used = self._raw
+        else:
+            reader.align_to_word()
+            self.frame_input_used = reader.byte_position()
+        return out
+
+    def decode_stream(self, data, total_length, out=None):
+        """Decode frames laid end to end in one buffer.
+
+        XCompress delimits each frame, so `slz.py` can hand them over one at a
+        time. The LZX inside an XEX is not delimited at all: the frames simply
+        follow one another, and the only thing marking the boundary is that the
+        bit reader restarts on a 16-bit boundary once 32 768 bytes have come
+        out. Decoding one frame at a time from successive slices reproduces
+        exactly that, because a fresh reader on an aligned position and a
+        realigned reader are the same thing.
+        """
+        if out is None:
+            out = bytearray()
+        view = memoryview(data)
+        target = len(out) + total_length
+        at = 0
+        while len(out) < target:
+            want = min(FRAME_SIZE, target - len(out))
+            before = len(out)
+            self.decode_frame(view[at:], want, out)
+            if len(out) == before:
+                raise LzxError("frame at input 0x%X produced nothing" % at)
+            at += self.frame_input_used
+            if at > len(view):
+                raise LzxError("ran off the end of the compressed stream")
         return out
 
 

@@ -80,12 +80,37 @@ everything from `pe_data_offset` to the end of the file.
 
 "Basic" is a run-length description of the address space: a list of
 `(data length, zero length)` pairs, where the data is copied from the stream
-and the zeros are gaps that were never stored. It is trivial to implement and
-it is what most retail titles use. "Normal" is LZX and is not implemented in
-this repository's tooling.
+and the zeros are gaps that were never stored. It is what Infinite Undiscovery
+uses. The description stops once only zeros are left, so the image it produces
+is legitimately shorter than the stated image size — 32 768 bytes shorter here
+— and the loader zero-fills the rest.
 
-A correct result starts with `MZ`. That check is worth making, because the
-wrong key produces plausible-looking noise rather than an error.
+**"Normal" is LZX**, and both of the other Xbox 360 titles tested use it, so it
+is implemented too. The decrypted body is not an LZX stream yet: it is a chain
+of blocks, each opening with the size and SHA-1 of the *next*, so the first
+block's size and hash have to come from the file format header at `+0x0C` and
+`+0x10` and the chain ends with a stated size of zero. Inside a block the
+compressed bytes are cut into chunks with a 16-bit length in front of each and
+a zero length closing the block. Strip that framing and what is left is one
+LZX stream whose 32 KB frames are not delimited.
+
+| Offset in FILE_FORMAT_INFO | Field, normal scheme |
+| --- | --- |
+| `0x08` | LZX window size — `0x8000` on both titles tested |
+| `0x0C` | Size of the first block |
+| `0x10` | SHA-1 of the first block, 20 bytes |
+
+**The hashes are the check, and they are also the key test.** Each is computed
+over the block exactly as it appears after decryption, so it confirms the
+decryption independently of whether the LZX behind it makes sense — Star Ocean
+4 gives 85 of 85 and Resonance of Fate 69 of 69. That matters because under
+this scheme the plaintext does *not* start with `MZ`: it starts with a block
+header, so the usual test for the right key cannot work, and one hash replaces
+it.
+
+Under the basic scheme, or no compression, a correct result does start with
+`MZ`, and that check is worth making because a wrong key produces
+plausible-looking noise rather than an error.
 
 ## 4. Infinite Undiscovery's headers
 

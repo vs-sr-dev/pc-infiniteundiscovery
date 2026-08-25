@@ -43,6 +43,13 @@ and `Tri_ace` itself, which is a node in the opening logo scene. These are
 weaker evidence about the engine and stronger evidence about the studio, and
 they survive changes to the binary formats that the magics would not.
 
+**The shader toolchain.** `AHSL`, which names the shader cache the engine
+writes -- `AHSLDiskCacheXe` on the Xbox 360, `AHSLDiskCachePs3_*` shipped as
+loose files in the PlayStation 3 build -- and the profile data beside it. It is
+listed among the pipeline names rather than above them because four ASCII
+letters are four ASCII letters; what makes it worth sweeping for is that it is
+the one name so far seen to survive a change of *platform*.
+
 **The engine namespace.** `Aska::` in an executable's RTTI settles the question
 outright. Two manglings are looked for, because tri-Ace did not stay on one
 compiler: MSVC writes `@Aska@@`, which is what an Xbox 360 XEX carries once
@@ -50,9 +57,13 @@ compiler: MSVC writes `@Aska@@`, which is what an Xbox 360 XEX carries once
 its namespace length-prefixed, so `Aska` becomes `4Aska` inside `_ZN4Aska...`.
 A PlayStation build will be the second kind.
 
-**Endianness.** Every signature above except one is ASCII, so a little-endian
-title -- a PC port, or anything on x86 -- matches them unchanged. The exception
-is the node field constant, which is looked for both ways round. That asymmetry
+**Endianness.** The ASCII *names* -- the versioned magics, the Maya node
+prefixes, the namespace -- match unchanged whatever the byte order. The
+**payload magics do not**, which was learned from a specimen rather than
+assumed: a FourCC written out as a 32-bit word comes out reversed on a
+little-endian build, and Star Ocean: Anamnesis on Android stores `AIF ` as
+` FIA`. Those five, the `SLZ` wrapper and the node field constant are all
+looked for both ways round. That asymmetry
 is worth knowing: **the conclusive tests survive a change of byte order, and
 the readers do not.** Finding the magics on a little-endian title would say the
 format is the same while every `struct` format string in this repository would
@@ -80,7 +91,8 @@ import struct
 import sys
 
 CHUNK = 1 << 24            # 16 MB at a time
-LOOKBACK = 64              # so a signature cannot fall between two chunks
+LOOKBACK = 64              # so neither a signature nor a validator's field
+                           # can fall between two chunks
 
 
 # (name, pattern, kind) -- kind decides how the summary weighs it.
@@ -96,6 +108,16 @@ SIGNATURES = [
     ("AIF image",        rb"AIF ",              "payload"),
     ("AAC audio",        rb"AAC ",              "payload"),
     ("SLZ wrapper",      rb"SLZ[\x00-\x0f]",    "structural"),
+    # A FourCC written out as a 32-bit word comes out reversed on a
+    # little-endian build. Star Ocean: Anamnesis on Android stores `AIF ` as
+    # ` FIA`, so the payload magics are looked for both ways round, and so is
+    # the compression wrapper.
+    ("ASF scene LE",     rb"\x20FSA",           "payload"),
+    ("AAF animation LE", rb"\x20FAA",           "payload"),
+    ("ACF collision LE", rb"\x20FCA",           "payload"),
+    ("AIF image LE",     rb"\x20FIA",           "payload"),
+    ("AAC audio LE",     rb"\x20CAA",           "payload"),
+    ("SLZ wrapper LE",   rb"[\x00-\x0f]ZLS",    "structural"),
     ("AI node field",    rb"\x01\x31\xf1\x19",  "structural"),
     ("AI node field LE", rb"\x19\xf1\x31\x01",  "structural"),
     ("Aska:: namespace", rb"(?:Aska@@|@Aska@@|Aska::)", "namespace"),
@@ -103,6 +125,7 @@ SIGNATURES = [
     ("R:M: node prefix", rb"R:M:",              "pipeline"),
     ("pCol primitives",  rb"pCol(?:Sphere|Cube|Capsule)", "pipeline"),
     ("Tri_ace node",     rb"Tri_ace",           "pipeline"),
+    ("AHSL shader tool", rb"AHSL",              "pipeline"),
 ]
 
 WEIGHT = {"versioned": "conclusive", "namespace": "conclusive",
@@ -128,10 +151,20 @@ def _sane_mron(blob, at):
 
 
 def _sane_slz(blob, at):
-    if at + 16 > len(blob):
+    """Both revisions of the wrapper.
+
+    Infinite Undiscovery states 0x20 at +0x04 and starts an XCompress stream
+    at +0x18. Star Ocean 5 keeps the compressed and uncompressed sizes exactly
+    where they were, at +0x08 and +0x0C, and states the same 0x20 at +0x14
+    instead -- there it really is the header size, because the payload begins
+    at +0x20. Requiring the size pair to make sense and 0x20 to appear in one
+    of the two places accepts both and still rejects chance matches.
+    """
+    if at + 0x18 > len(blob):
         return None
     header, packed, plain = struct.unpack_from(">3I", blob, at + 4)
-    return header == 0x20 and 0 < packed <= plain
+    later = struct.unpack_from(">I", blob, at + 0x14)[0]
+    return 0 < packed <= plain and 0x20 in (header, later)
 
 
 def _sane_length(blob, at):
@@ -152,11 +185,30 @@ def _sane_node_field(blob, at, swap=False):
             and parts <= nodes and at_nodes == 0x2C and at_links > at_nodes)
 
 
+def _sane_length_le(blob, at):
+    """The same self-declared length, read the other way round."""
+    if at + 8 > len(blob):
+        return None
+    total = struct.unpack_from("<I", blob, at + 4)[0]
+    return 0x20 <= total <= (1 << 28)
+
+
+def _sane_slz_le(blob, at):
+    if at + 0x18 > len(blob):
+        return None
+    header, packed, plain = struct.unpack_from("<3I", blob, at + 4)
+    later = struct.unpack_from("<I", blob, at + 0x14)[0]
+    return 0 < packed <= plain and 0x20 in (header, later)
+
+
 VALIDATORS = {
     "MRON container":  _sane_mron,
     "SLZ wrapper":     _sane_slz,
+    "SLZ wrapper LE":  _sane_slz_le,
     "ASF scene":       _sane_length,
     "AIF image":       _sane_length,
+    "ASF scene LE":    _sane_length_le,
+    "AIF image LE":    _sane_length_le,
     "AI node field":   _sane_node_field,
     "AI node field LE": lambda b, a: _sane_node_field(b, a, swap=True),
 }
@@ -203,25 +255,38 @@ def sweep(path, keep=4, progress=None):
     size = os.path.getsize(path)
     done = 0
     with open(path, "rb") as fh:
-        carry = b""
-        base = 0
+        carry = b""        # tail of the previous chunk, prepended to this one
+        start = 0          # global offset of `data`
+        frontier = 0       # global offset up to which matches are accounted for
         while True:
             block = fh.read(CHUNK)
             if not block:
                 break
             data = carry + block
+            done += len(block)
+            end = start + len(data)
+
+            # The overlap means every chunk boundary is read twice, so each
+            # match has to be attributed to exactly one of the two passes.
+            # A match that begins in the last LOOKBACK bytes is left to the
+            # next chunk, where the field its validator wants is present as
+            # well; one that begins before that is taken here and skipped
+            # there. At end of file there is no next chunk, so take the lot.
+            limit = end if done >= size else end - LOOKBACK
             for match in pattern.finditer(data):
+                at = start + match.start()
+                if at < frontier or at >= limit:
+                    continue
                 which = match.lastindex - 1
                 check = checks[which]
-                at = match.start()
-                sound = None if check is None else check(data, at)
-                hits[which].add(base - len(carry) + at,
-                                match.group(), keep, sound)
-            base += len(block)
-            done += len(block)
+                sound = None if check is None else check(data, match.start())
+                hits[which].add(at, match.group(), keep, sound)
+            frontier = limit
+
             if progress:
                 progress(done, size)
             carry = data[-LOOKBACK:]
+            start = end - len(carry)
     return hits, size
 
 

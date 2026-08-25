@@ -21,7 +21,8 @@ Getting at the PE takes three steps:
 3. **Decompress.** The "basic" scheme is a run-length description of the
    address space: a list of (data length, zero length) pairs, where the data is
    copied from the stream and the zeros are the .bss-style gaps that were never
-   stored. The "normal" scheme is LZX and is not implemented here.
+   stored. The "normal" scheme is a chain of hash-linked blocks holding an
+   LZX stream, decoded through `lzx.py`.
 
 The retail key is not a secret and never was -- it is public in every Xbox 360
 emulator and homebrew toolchain, because it has to be in order to load a game
@@ -63,6 +64,7 @@ Usage
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import struct
 import sys
@@ -298,17 +300,39 @@ class Xex:
         if off is None:
             return
         size, self.encryption, self.compression = struct.unpack_from(">IHH", self.data, off)
+        self.window_size = None
+        self.first_block = None
         if self.compression == 1:
             n = (size - 8) // 8
             for i in range(n):
                 data_size, zero_size = struct.unpack_from(">II", self.data, off + 8 + i * 8)
                 self.basic_blocks.append((data_size, zero_size))
+        elif self.compression == 2:
+            # The LZX window, then the size and SHA-1 of the first block. Every
+            # block after it is described the same way by the one before it.
+            self.window_size, first_size = struct.unpack_from(">II", self.data, off + 8)
+            self.first_block = (first_size, self.data[off + 0x10:off + 0x24])
 
     # -- decryption --------------------------------------------------------
 
     def session_key(self, keyname="retail"):
         base = {"retail": RETAIL_KEY, "devkit": DEVKIT_KEY}[keyname]
         return aes_ecb_decrypt_block(base, self.encrypted_key)
+
+    def _decrypted(self, clear):
+        """Did this key work?
+
+        With no compression, or the basic scheme, the answer is in the first
+        two bytes: a PE image starts "MZ". Under the normal scheme the
+        plaintext starts with a block header instead, and the test there is
+        better rather than worse -- the file format header states the SHA-1 of
+        that first block, so one hash settles it.
+        """
+        if self.compression == 2 and self.first_block:
+            size, expected = self.first_block
+            return (len(clear) >= size
+                    and hashlib.sha1(clear[:size]).digest() == expected)
+        return clear[:2] == b"MZ"
 
     def decrypt_image(self, keyname=None):
         """Return the decrypted, decompressed PE image."""
@@ -321,7 +345,7 @@ class Xex:
             clear = None
             for name in names:
                 candidate = aes_cbc_decrypt(self.session_key(name), body)
-                if candidate[:2] == b"MZ":
+                if self._decrypted(candidate):
                     self.key_used = name
                     clear = candidate
                     break
@@ -340,9 +364,58 @@ class Xex:
                 pos += data_size
                 out += bytes(zero_size)
             return bytes(out)
+        if self.compression == 2:
+            return self.unpack_normal(clear)
         raise NotImplementedError(
             "compression type %d (%s) is not implemented"
             % (self.compression, COMPRESSION_NAMES.get(self.compression, "?")))
+
+    # -- "normal" compression ---------------------------------------------
+
+    def unpack_normal(self, clear):
+        """LZX, wrapped in a chain of hash-linked blocks.
+
+        The decrypted body is not an LZX stream yet. It is a chain of blocks,
+        each one opening with the size and SHA-1 of the *next*, so the first
+        block's size and hash have to come from the file format header and the
+        chain ends with a stated size of zero. Inside a block the compressed
+        bytes are cut into chunks with a 16-bit length in front of each and a
+        zero length ending the block.
+
+        Strip that framing and what is left is one LZX stream, whose frames are
+        the ordinary 32 KB ones and are not delimited -- see
+        `lzx.LzxDecoder.decode_stream`.
+
+        The hashes are worth checking rather than skipping: they are computed
+        over the block *as it appears here*, so they confirm the decryption
+        independently of whether the LZX that follows makes sense.
+        """
+        from lzx import LzxDecoder
+
+        packed = bytearray()
+        self.block_hashes = []          # (stated, computed) per block
+        size, expected = self.first_block
+        at = 0
+        while size:
+            block = clear[at:at + size]
+            if len(block) < 24:
+                raise ValueError("block at 0x%X runs off the end of the image" % at)
+            self.block_hashes.append((expected, hashlib.sha1(block).digest()))
+            next_size = struct.unpack_from(">I", block, 0)[0]
+            next_hash = bytes(block[4:24])
+            cut = 24
+            while True:
+                chunk = struct.unpack_from(">H", block, cut)[0]
+                cut += 2
+                if not chunk:
+                    break
+                packed += block[cut:cut + chunk]
+                cut += chunk
+            at += size
+            size, expected = next_size, next_hash
+
+        window_bits = max(15, (self.window_size or 0x8000).bit_length() - 1)
+        return bytes(LzxDecoder(window_bits).decode_stream(packed, self.image_size))
 
 
 def _decode_execution_info(blob):
@@ -503,6 +576,23 @@ def cmd_extract(args):
     print("key used   : %s" % getattr(xex, "key_used", "none (unencrypted)"))
     print("wrote      : %s, %d bytes" % (args.output, len(image)))
     print("PE header  : %s" % ("yes" if image[:2] == b"MZ" else "NO -- check the key"))
+    # The basic scheme describes the image as runs of stored bytes and runs of
+    # zeros, and stops describing it once only zeros are left -- so coming out
+    # short of the stated image size is normal there and means nothing.
+    # Coming out long never is.
+    short = xex.image_size - len(image)
+    if short < 0:
+        note = "  -- LONGER THAN THE HEADER STATES"
+    elif short:
+        note = "  -- %d short, zero-filled by the loader" % short
+    else:
+        note = ""
+    print("image size : %d stated, %d produced%s"
+          % (xex.image_size, len(image), note))
+    hashes = getattr(xex, "block_hashes", None)
+    if hashes:
+        good = sum(1 for stated, got in hashes if stated == got)
+        print("block SHA-1: %d of %d match" % (good, len(hashes)))
     return 0
 
 

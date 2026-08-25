@@ -14,7 +14,7 @@ A 0x24-byte header, big-endian throughout:
 
     +0x00  4  'AAF '
     +0x04  4  total length             (zero in every file seen)
-    +0x10  4  version, 0x16 everywhere
+    +0x10  4  version -- 0x16 in Infinite Undiscovery, 0x190000 in Star Ocean 4
     +0x14  2  record count
     +0x16  2  duration, in the same units as a keyframe time
     +0x18  2  zero, or 0x0001 in some files
@@ -134,6 +134,15 @@ MAGIC = b"AAF "
 HEADER = 0x24
 RECORD_HEADER = 0x28
 TRACK_HEADER = 0x14
+
+
+
+# Infinite Undiscovery writes 0x16 in every animation on both discs. Star
+# Ocean 4 writes 0x190000 -- a different half of the word, not a larger number
+# -- and nothing else about the format moved with it: the same records, tracks,
+# keyframe blocks and channel numbering read straight through. Both are
+# accepted so that a self-check reports the things that are actually wrong.
+KNOWN_VERSIONS = (0x16, 0x190000)
 
 
 class AafError(Exception):
@@ -386,7 +395,7 @@ class AafFile:
     def problems(self):
         """Everything about this file that does not add up. Empty is good."""
         bad = []
-        if self.version != 0x16:
+        if self.version not in KNOWN_VERSIONS:
             bad.append("version %#x" % self.version)
         if len(self.animated) != self.animated_count:
             bad.append("header counts %d animated tracks, the records hold %d"

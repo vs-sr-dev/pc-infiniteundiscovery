@@ -71,6 +71,35 @@ Entries holding an SLZ block are padded, with
 `entry size == align_up(compressed size, 4) + 24` — the 24 being the wrapper
 that sits before the counted region.
 
+## 2a. What a second title changed
+
+Star Ocean 4's disc carries the same wrapper, and reading it moved two fields
+that this corpus showed as constants.
+
+**The XCompress version.** Star Ocean 4 writes `0x01030000` at `0x1C` where
+Infinite Undiscovery writes `0x01020000`.
+
+**The chunk size.** Infinite Undiscovery fixes it at `0x20000`, so a large
+payload is several chunks. Star Ocean 4 sets it to the whole uncompressed
+length, so a block is one chunk however large it is. The window stays
+`0x20000` in both.
+
+One consequence reached the reader. Infinite Undiscovery's frame walk lands
+exactly on the end of the chunk; Star Ocean 4's leaves a few bytes of zero
+padding behind the last frame. `slz.py` now stops on the **output** count
+rather than the input length, and checks that whatever follows is zero — so a
+walk that went wrong still fails, because non-zero bytes after the last frame
+are an error. With that one change, 797 of Star Ocean 4's blocks decompress
+into `AAF`, `ASF`, `ACF`, `AIF` and `-CNS` payloads that their own readers then
+parse.
+
+Star Ocean 4 also has stored blocks — 20 in the first 64 MiB of `soz0.bin`,
+the arrangement [§6a](#6a-some-blocks-are-stored-not-compressed) describes. The
+PlayStation 3 build of Star Ocean 5 makes that arrangement explicit rather than
+implicit: byte `0x03`, a constant 4 here, is a **method** there, and method 0
+means stored. That build moves several other fields as well, and is set out in
+[aska-across-titles.md](../aska-across-titles.md#3-slz-in-2016).
+
 ## 3. Frames
 
 A chunk is not one LZX bitstream, and this is the part that decides whether a

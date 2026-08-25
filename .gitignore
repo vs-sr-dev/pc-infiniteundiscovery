@@ -3,11 +3,16 @@
 # This repository holds tools and documentation only.
 # ---------------------------------------------------------------------------
 
-# Disc images and the archives they came in
+# Disc images, packages and the archives they came in
 *.iso
 *.7z
 *.zip
 *.rar
+*.pkg
+*.rap
+*.apk
+*.ipa
+*.obb
 iso/
 
 # Anything extracted from a disc

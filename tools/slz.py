@@ -160,7 +160,7 @@ class SlzBlock:
         out = []
         pos = 0
         produced = 0
-        while pos < len(payload):
+        while pos < len(payload) and produced < want:
             if payload[pos] == FRAME_EXTENDED:
                 if pos + 5 > len(payload):
                     raise SlzError("extended frame header past end of chunk")
@@ -178,12 +178,18 @@ class SlzBlock:
             out.append((payload[pos:pos + size], length))
             produced += length
             pos += size
-        if pos != len(payload):
-            raise SlzError("frame walk ended at %d of %d bytes"
-                           % (pos, len(payload)))
         if produced != want:
             raise SlzError("frames produce %d bytes, chunk wants %d"
                            % (produced, want))
+        # Infinite Undiscovery's frame walk lands exactly on the end of the
+        # chunk. Star Ocean 4's does not: it leaves a few bytes of zero
+        # padding behind the last frame. Stopping on the output count rather
+        # than the input length reads both, and the padding is still checked
+        # -- anything non-zero there means the walk went wrong.
+        if any(payload[pos:]):
+            raise SlzError("%d non-zero bytes after the last frame, at %d of %d"
+                           % (sum(1 for b in payload[pos:] if b), pos,
+                              len(payload)))
         return out
 
     def decompress(self):

@@ -59,7 +59,8 @@ docs/sessions/ chronological work log
 | `tools/aif.py` | Read AIF textures: header, Xbox 360 untiling, DXT and uncompressed decoding, and a PNG writer with no dependencies. |
 | `tools/asf.py` | Read ASF scenes: the chunk tree, the named node graph, the full vertex format — positions, normals, binormals, texture coordinates, colour and skinning — the materials and which texture each mesh uses, export to Wavefront OBJ with an MTL and decoded PNGs, and a bulk check of the decode against the geometry. |
 | `tools/snc.py` | Read SNC scene scripts, the compiled script behind every `SCE-` resource: summarise and self-check one file, disassemble it with its data blocks expanded, print the string table with the opcodes that use each name, and check a whole corpus. |
-| `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for eighteen engine signatures in one pass — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, and honest about the fact that a negative result proves very little. |
+| `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for twenty-five engine signatures in one pass — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, which it has now done — see the cross-title document — and honest about the fact that a negative result proves very little. |
+| `tools/pkg.py` | Read a PlayStation 3 `.pkg` package: header, metadata, item table and extraction, through the AES-128-CTR run the whole thing sits behind. Written because Star Ocean 5's PS3 build was never pressed on a disc, so there was no filesystem to walk. |
 | `tools/node.py` | Read the NODE payload, the ASKA AI node field: the navigation-mesh polygons and what they connect to, the portal links with their precomputed route costs, the spatial partitions, an OBJ export of a map's walkable floor, and a corpus check. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
@@ -138,6 +139,13 @@ Container offsets for the European release are tabulated in
 * [The ASKA engine](docs/aska-engine.md) — what the retail binary reveals about
   tri-Ace's engine: 1 740 recovered class names, the renderer, the AI and
   battle architecture, the shader library.
+* [Is ASKA in tri-Ace's other titles?](docs/aska-across-titles.md) — the one
+  document here that is not about this disc. Star Ocean 4, Resonance of Fate,
+  the PlayStation 3 build of Star Ocean 5 and the Android build of Star Ocean:
+  Anamnesis, measured against this baseline: what the engine kept, what it
+  renumbered, and how much of each is readable with the tools in this
+  repository. The answer is yes to all four, and it is a different answer in
+  each case.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
@@ -181,6 +189,8 @@ Container offsets for the European release are tabulated in
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
+* [PKG](docs/formats/pkg.md) — the PlayStation 3 package, Sony's rather than
+  tri-Ace's, and the only way into the Star Ocean 5 specimen.
 * [XDBF](docs/formats/xdbf.md) — the title metadata database, achievements
   included.
 * [XEX2](docs/formats/xex.md) — the Xbox 360 executable format, and this
