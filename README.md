@@ -90,6 +90,12 @@ python tools/aaf.py pose  extract/anim/000A4000_008_ANIM.aaf --time 40
 python tools/aaf.py check "extract/anim/*.aaf"
 python tools/aaf.py rest  "extract/anim/*.aaf" --models "extract/models/*.asf"
 
+# Pull out the collision and turn one file into a viewable OBJ
+python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag COLL --decompress extract/coll
+python tools/acf.py tree  extract/coll/49450000_036_COLL.acf
+python tools/acf.py obj   extract/coll/49450000_036_COLL.acf collision.obj
+python tools/acf.py check "extract/coll/*.acf" --models "extract/models/*.asf"
+
 # Walk the music, which sits between the archives rather than inside them
 python tools/aac.py bank "path/to/disc1.iso" --offset 0x8E75C000 --length 143654912
 python tools/aac.py info "path/to/disc1.iso" --offset 0x8E75C000 --length 3842048
@@ -138,6 +144,10 @@ Container offsets for the European release are tabulated in
   resource on the disc. It animates an ASF's node tree, and its constant
   channels reproduce that tree's rest pose, which is what identifies them.
   Rotations are a 48-bit packed axis-and-angle quaternion.
+* [ACF](docs/formats/acf.md) — the Aska Collision File: a sphere tree over
+  spheres, cubes and capsules, hung off the same bones the scene and the
+  animation name. Solved: all 972 files pass every check, and the shape code
+  agrees with the name the artist typed on all 8 119 primitives that carry one.
 * [AAC](docs/formats/aac.md) — the Aska Audio Container, which is not MPEG AAC:
   every sound in the game, named with the filename it was built from, wrapping
   XMA2. Solved: 22 243 sounds pass every check, and all 79 music tracks decode.
@@ -181,9 +191,14 @@ session closed the bone chain in ASF: a vertex's one-byte bone index runs
 through `bnpi` and `bnpl` to a node in the `tree`, on every skinned mesh in the
 corpus.
 
-What remains is `ACF ` collision, and the scene scripting behind `SCE-`. Those
-are plain files sitting behind tools that work, rather than questions blocked
-on compression.
+Session 9 also opened `ACF ` collision, which turned out small enough to finish
+in the same sitting: a sphere tree of spheres, cubes and capsules whose groups
+are named after bones, with three independent checks on the shape reading —
+the redundant bounding radius, the file's own length, and the name the artist
+typed in Maya.
+
+What remains is the scene scripting behind `SCE-`. It is a plain file sitting
+behind tools that work, rather than a question blocked on compression.
 [`TODO.md`](TODO.md) lists what is still open, and
 [`docs/sessions/`](docs/sessions/) is the running log of how each piece was
 established.

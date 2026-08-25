@@ -1,13 +1,14 @@
-# Session 9 — the bones move
+# Session 9 — the bones move, and what they bump into
 
 **Date:** 2026-08-25
 **Goal:** open question 1, `AAF ` animation — the largest format nobody had
 looked at — after first reading `bnpl` and `bnpi`, the two small chunks a
-vertex's bone index has to pass through.
+vertex's bone index has to pass through. `ACF ` collision, which was question 1
+after that, turned out small enough to finish in the same sitting.
 
 ## Outcome
 
-Both solved. A model was complete after session 8 apart from moving; it now
+All three solved. A model was complete after session 8 apart from moving; it now
 moves, and the chain from a vertex to the node that drives it is closed at
 every level.
 
@@ -16,6 +17,8 @@ every level.
 * **`AAF `** parses in full: all 900 payloads sampled pass every internal
   consistency check, and its channels are identified against the rest pose of
   the scene they animate — evidence from outside the decode.
+* **`ACF `** parses in full too: all 972 files, with three independent checks
+  on the shape reading.
 
 ## The bone chain
 
@@ -124,12 +127,64 @@ against the curve it is supposed to describe, over 60 210 keys:
 That is a Maya smooth tangent scaled to the segment it opens — which is what
 an exporter would have written out of the artists' curves.
 
+## `ACF ` — collision, and three ways to check it
+
+The smallest Aska format and the most completely read. A 0x30-byte header, an
+array of 0x40-byte groups, an array of 0x30-byte primitive records, and the
+primitive data on a 0x20 grid. Nothing compressed, nothing indirect.
+
+**The tree is the skeleton.** A group is a bounding sphere with a name, and the
+names are `R:M:SK_HipR`, `R:M:SK_LtArmR`, `R:M:SK_RtLegL` — the same names the
+ASF node tree and the AAF records carry. 947 of 1 269 group names are in the
+node tree of the scene from the same archive, and 179 of 196 files have every
+one of theirs.
+
+Branch groups hold five child slots terminated by `0xFFFF`, and bit `0x8000`
+picks which array the child is in — the leaves or the branches. Reading it the
+other way scatters the tree; reading it this way means **following the slots
+from group 0 reaches every group exactly once, on all 522 files with
+branches**. Leaves instead name a run of primitives, and those runs partition
+the primitive array exactly, on all 972.
+
+**Three checks on the shapes, none of them circular.** The shape code is 0, 1
+or 2 — sphere, cube, capsule, the same order the engine's RTTI lists
+`Aska::AcfPrimitiveData_*` in. Each shape stores different parameters, so:
+
+* the redundant bounding radius in every primitive should be the sphere's
+  radius, the cube's half-diagonal, or the capsule's half-length plus radius —
+  and it is, on **all 8 302** that state one, median error exactly zero;
+* each shape stores a different number of floats, 5, 8 and 6, so the file only
+  ends exactly after the last primitive's data if the code picks the right
+  count — it does, on all 972;
+* 8 119 primitives are named some variation of `pColSphere`, `pColCube` or
+  `pColCapsule`, and **the code agrees with the artist's name on all 8 119**.
+
+The 16-bit mask on a primitive is carried up the tree as an OR: 7 252 of 7 252
+leaves and 2 281 of 2 281 branches. And the header's `+0x28` is exactly the
+highest point the collision reaches in Y, on all 972 — a ceiling height the
+engine can read without touching the tree.
+
+One thing does *not* check out arithmetically, and it is informative: a leaf's
+sphere bounds its own primitives (98.4 %), but a branch's does not bound its
+children's. The bone transforms between them live in the ASF, not here.
+
+**`atari`.** The largest file in the corpus fences off a map region with 618
+capsules, and its root group is not called `R:M:` anything. It is called
+`atari` — 当たり, the ordinary Japanese word for a hit, and the first half of
+当たり判定, which is what a Japanese studio calls a collision volume. Someone
+typed it in romaji instead of using the naming convention and it shipped.
+`hanes`, `e_raigei`, `MEDICAL_HERB_01` and `CTRL_elevator` are in the same
+corpus.
+
 ## Tooling
 
 `tools/aaf.py` is new: `tree`, `info`, `pose --time`, `check` over a corpus,
 and `rest`, which is the cross-check against the ASF rest pose above.
 `tools/asf.py` gained `skeleton`, reads `bnpl`/`bnpi` into `Object3D` and
 `Mesh`, and its `check` now reports all three rungs of the bone chain.
+`tools/acf.py` is new as well: `tree`, `info`, `check` (with `--models`, the
+cross-check against the scene's node tree), and `obj`, which writes the
+collision volumes out as a mesh so they can be looked at.
 
 ## Left open
 
@@ -143,4 +198,8 @@ and `rest`, which is the cross-check against the ASF rest pose above.
 4. The channel numbers other than 5, 6 and 7 — 14, 16, 18, 22, 45 and more,
    on lights, emitters and cameras — and the semantic byte at track `+0x12`.
 5. The `0x0200` some tracks put in the high half of their size word.
-6. Where the skeleton of a `tree`-less ASF lives. `SKAC` is the candidate.
+6. Where the skeleton of a `tree`-less ASF lives. `SKAC` is the candidate, and
+   it would also say what a collision file's bone names resolve against.
+7. In ACF: the `u16` at primitive `+0x28`, a permutation of `0 .. n-1` in 460
+   files and something else in 512; which bit of the collision mask means what;
+   and `+0x2C`, exactly the root sphere seen from the origin on 463 of 972.
