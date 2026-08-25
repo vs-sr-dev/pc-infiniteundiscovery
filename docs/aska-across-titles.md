@@ -282,6 +282,42 @@ time, and the string tables read `camera1`, `pc01_Sheath`, `iron_door01`,
 `DoorProg01` — where `pc01_Sheath` is also a node in the skeleton `asf.py` read
 out of the same disc.
 
+### The container is `PACK`
+
+The sweep says Star Ocean 4 has no `MRON` anywhere, and that was left as an
+open question — something must index those thousands of payloads. It does, and
+it is called **`PACK`**:
+
+| | first 128 MiB of each container |
+| --- | --- |
+| `ud1.bin`, `ud2.bin` | none |
+| `soz0.bin` | `PACK` × 7, first at `+0x62800` |
+| `soz1.bin` | `PACK` × 32, the first **at offset 0** |
+| `ROF0.bin`, `ROF1.bin` | none |
+
+It is new in 2009: Infinite Undiscovery does not have one. The header is four
+words and then a table, all big-endian:
+
+| Offset | Field | `soz1.bin` |
+| --- | --- | --- |
+| `0x00` | `PACK` | |
+| `0x04` | version | `0x0706` |
+| `0x08` | entry count | 14 |
+| `0x0C` | total size | `0x13B10` |
+| `0x10` | entries, 16 bytes each: id, flags, **size**, **offset** | |
+
+Two things check it, and both come from numbers the header does not control:
+
+* the table ends at `0x10 + 14 × 16 = 0xF0`, which is **exactly** the offset the
+  first entry gives;
+* every entry points at an `SLZ` block, and on **13 of the 14** the
+  uncompressed size in the SLZ wrapper equals the size the table states. The
+  fourteenth states 64 where the wrapper says 54.
+
+Two of the fourteen carry `SLZ` with byte `0x03` set to **0**, and one of those
+has packed size equal to plain — the stored method, read here from a second
+title after Star Ocean 5's package showed the same byte doing the same job.
+
 ### The opcode numbering does not carry over
 
 That last result invites an obvious hope — a second corpus for the 246 unnamed
@@ -385,3 +421,40 @@ That matters more for what comes next than for what came before. Every
 remaining candidate — Star Ocean 6 on x86, a PlayStation Vita title, anything
 else on mobile — is little-endian, and the tool would have reported nothing on
 all of them.
+
+## 9. Beyond the Labyrinth — the first specimen that says no
+
+Nintendo 3DS, 2012, Japan only, tri-Ace from end to end. 706 MB of RomFS, and
+it is the first title tested where the answer is not yes.
+
+**The sweep finds nothing.** Over the whole 0.70 GiB image every count is at or
+below what chance produces on that much data, and every signature with a
+structural test scores **zero sound** — in both byte orders, the reversed
+magics included. Under the `P@CK` entries are blocks tagged `mpak`, which are
+not `SLZ`.
+
+**Its assets are Nintendo's formats.** Of the first 400 files in the RomFS,
+359 are `P@CK`, 36 are `CTPK` — the 3DS SDK's texture container — two are
+`CGFX` and one is `DVLB`, the SDK's shader binary. No `AIF `, no `ASF `, in
+either order.
+
+**Its executable does not name the engine.** `.code` is compressed with the
+console's backward LZ77; decompressed it holds no `Aska`, no `AHSL`, no `R:M:`.
+
+What *is* familiar is the layer above the formats:
+
+* the RomFS is 1 313 files called `f0000.bin`, `f0001.bin`, … — the same
+  convention as Star Ocean: Anamnesis's `assets/disc1/f00000.bin`;
+* the container tag is **`P@CK`**, one bit away from the **`PACK`** that
+  indexes Star Ocean 4, with the same header shape: tag, a version word, a
+  count at `+0x08`, then fixed-size records;
+* the material names are the same house style — `c028_01_bodyM`,
+  `c032_01_moyouM_bloom`, `etc_Daura01m` beside `AAmbientLight1` and
+  `HemiSphereLight1` — as Infinite Undiscovery's `cp001_f01a_hada2` and Star
+  Ocean 4's `cp002_Gen`.
+
+So Beyond the Labyrinth is tri-Ace in its art pipeline and in its container
+family, and shares **no payload format at all** with the other four. Whether
+that is a different engine or ASKA rebuilt on a handheld's SDK is not something
+this evidence can decide, and it is worth saying plainly rather than picking
+the flattering reading.

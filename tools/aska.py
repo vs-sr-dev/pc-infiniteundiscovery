@@ -185,6 +185,21 @@ def _sane_node_field(blob, at, swap=False):
             and parts <= nodes and at_nodes == 0x2C and at_links > at_nodes)
 
 
+def _sane_aac(blob, at):
+    """`AAC `: a total size that makes sense, over two words that are zero.
+
+    Added after Resonance of Fate, where the raw count was 185 on 7.3 GiB --
+    a hundred times what chance produces -- and there was no test to say so,
+    which is exactly the failure this column exists to prevent. The two zero
+    words at +0x08 and +0x0C are zero in both revisions of the header seen so
+    far, and two zero words behind a plausible size is not a chance match.
+    """
+    if at + 0x14 > len(blob):
+        return None
+    total, a, b = struct.unpack_from(">3I", blob, at + 4)
+    return 0x40 <= total <= (1 << 26) and a == 0 and b == 0
+
+
 def _sane_length_le(blob, at):
     """The same self-declared length, read the other way round."""
     if at + 8 > len(blob):
@@ -207,6 +222,7 @@ VALIDATORS = {
     "SLZ wrapper LE":  _sane_slz_le,
     "ASF scene":       _sane_length,
     "AIF image":       _sane_length,
+    "AAC audio":       _sane_aac,
     "ASF scene LE":    _sane_length_le,
     "AIF image LE":    _sane_length_le,
     "AI node field":   _sane_node_field,
