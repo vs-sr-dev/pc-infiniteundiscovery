@@ -28,7 +28,7 @@ once.
 | `MINI` | `INIM00.1` | `MINI` version 1.00 |
 | `SIG-` | `-GIS00.1` | `SIG-` version 1.00 |
 | `TTD-` | `DTT\0` | unidentified |
-| `NODE` | `0x0131F119` | [the AI node field](node.md) — a navigation mesh; no ASCII magic |
+| `NODE` | `0x0131F119`, sometimes behind `SLZ` | [the AI node field](node.md) — a navigation mesh; no ASCII magic |
 
 ## The `A?F` family
 
@@ -128,6 +128,14 @@ MRON00.2  ->  NORM  2.00
 constant `0x0131F119`, and [session 11](../sessions/session-11.md) showed it is
 the navigation mesh belonging to the `SCE-` script in the same archive — the
 two always appear together, one for one. See [node.md](node.md).
+
+`NODE` is also the one tag that is **compressed only sometimes**. Of the 44 on
+disc 1, 33 are stored in the clear and 11 sit behind an `SLZ` wrapper, so the
+tag alone does not say whether to decompress; the payload's first bytes do.
+That is easy to miss because `mron.py --decompress` handles both and says
+nothing. It surfaced from a count that did not match: `aska.py` finds the
+constant 33 times on disc 1, not 44, and the missing 11 are exactly the
+compressed ones.
 
 `SNC-` is the odd one: it comes from a `SCE-` resource, and the two names are
 close enough to be the same concept ("scene") under two spellings. That is now

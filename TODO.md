@@ -178,6 +178,48 @@ so is a full slice of every resource type.
    "The ASF of that game parses and passes its checks" is an order of magnitude
    stronger than "the magic matches".
 
+### The baseline to compare against
+
+Infinite Undiscovery disc 1, swept with `aska.py identify` — the numbers the
+other titles get read against. `sound` is the subset whose following field has
+a plausible shape; a bare four-byte magic turns up by chance about once per
+four gigabytes, so for the signatures that have a test it is the only column
+worth reading.
+
+| Signature | Hits | Sound | Version |
+| --- | ---: | ---: | --- |
+| MRON container | 6 873 | 6 261 | `MRON00.2` |
+| SNC scene script | 7 | | `-CNS00.3` |
+| AREA | 94 | | `AERA00.4` |
+| MINI | 44 | | `INIM00.1` |
+| SIG- signal | 2 909 | | `-GIS00.1` |
+| ASF scene | 1 454 | 1 450 | |
+| AAF animation | 6 763 | | |
+| ACF collision | 1 314 | | |
+| AIF image | 3 321 | 3 320 | |
+| AAC audio | 9 080 | | |
+| SLZ wrapper | 8 104 | 8 082 | |
+| AI node field | 33 | 33 | |
+| `R:M:` node prefix | 877 638 | | |
+| pCol primitives | 10 357 | | |
+| `Tri_ace` node | 1 | | |
+
+A whole 7.8 GiB image takes about 35 minutes. The cost is the matching, not
+the reading, so a faster disc does not help.
+
+Three of those rows are worth knowing about before reading someone else's:
+
+* **`-CNS00.3` shows 7, not the 44 `SCE-` resources on the disc**, because the
+  other 37 are SLZ-compressed and their magic is not visible. Seven is exactly
+  the number of *stored* `SCE-` payloads session 10 counted, by a different
+  route.
+* **`AI node field` shows 33, not 44**, for the same reason, and chasing that
+  gap is what turned up the fact that `NODE` is compressed only sometimes —
+  33 stored, 11 behind `SLZ`. A count that does not match is worth following.
+* **`Tri_ace` appears exactly once** on the whole disc, in the opening logo
+  scene. If it appears in another title at all, that is the studio's own
+  fingerprint rather than the engine's.
+
 ### Two things to know before starting
 
 **The tests are asymmetric.** A hit on a versioned magic or on the engine
