@@ -1,6 +1,22 @@
 #!/usr/bin/env python3
 """
-slz.py -- decompressor for the SLZ blocks in Infinite Undiscovery's containers.
+slz.py -- decompressor for the SLZ blocks in tri-Ace's containers.
+
+Two wrappers, two codecs
+------------------------
+`SLZ` outlives every other name in this engine: it is on the 2003 PlayStation 2
+discs and still on the 2016 PlayStation 3 build. What changes underneath it is
+the codec, and the byte at +0x03 says which one -- see
+[docs/formats/slz.md](../docs/formats/slz.md).
+
+This file reads two of them:
+
+* the **Xbox 360** wrapper, 24 bytes, around a stock Microsoft XCompress
+  stream. That is what the rest of this repository uses and what the notes
+  below describe.
+* the **PlayStation 2** wrapper, 16 bytes, around tri-Ace's own LZ77. Method 0
+  is stored and **method 1** is the codec cracked in session 14; methods 2 and
+  3 are not read yet. Use `slz.py scan` on a PlayStation 2 image.
 
 Most of the game's bulk -- every `MESH`, `MTEX`, `SCE-`, `SKAC` and `APAC`
 resource, 1812 blocks on disc 1 alone -- is stored compressed behind a header
@@ -206,6 +222,136 @@ class SlzBlock:
         return bytes(out[:self.uncompressed_size])
 
 
+# ---------------------------------------------------------------------------
+# The PlayStation 2 wrapper, and the codec behind method 1.
+#
+# Header, little-endian, 16 bytes:
+#
+#     0x00  3  "SLZ"
+#     0x03  1  method -- 0 stored, 1..3 compressed
+#     0x04  4  compressed size, counted from 0x10
+#     0x08  4  uncompressed size
+#     0x0C  4  zero
+#     0x10  .. payload
+#
+# Method 1 is an LZ77 with byte-wide flags. A flag byte carries eight tokens,
+# read from the least significant bit up; a 1 is a literal byte and a 0 is a
+# two-byte back-reference:
+#
+#     dist = a | ((b & 0x0F) << 8)      1 .. 4095, counted back from the
+#                                       current end of the output
+#     len  = (b >> 4) + 3               3 .. 18
+#
+# Overlapping copies are ordinary and common -- a distance of 1 is how a run
+# of zeroes is written.
+#
+# How the fields were pinned down, since none of it is guessable: the flag
+# framing comes from a block whose plaintext begins "so3mclib 1.80i", where
+# 0xFF flag bytes land on eight-literal runs three times in a row; the length
+# field comes from the output landing on exactly the stated size in 12 of 12
+# blocks, which the offset field cannot affect; and the offset field comes from
+# a known-plaintext search for "Bip01 ", the 3ds Max biped prefix, over every
+# composition of the two bytes and every ring-buffer start. Only one reading
+# produces it.
+
+PS2_WRAPPER_SIZE = 0x10
+
+PS2_STORED = 0
+PS2_LZ77 = 1
+
+
+def unpack_ps2_lz77(src, want):
+    """Method 1: LZ77 with byte-wide flags. Returns (output, bytes consumed)."""
+    out = bytearray()
+    i = 0
+    n = len(src)
+    flags = 0
+    bits = 0
+    while len(out) < want:
+        if bits == 0:
+            if i >= n:
+                break
+            flags = src[i]
+            i += 1
+            bits = 8
+        literal = flags & 1
+        flags >>= 1
+        bits -= 1
+        if literal:
+            if i >= n:
+                break
+            out.append(src[i])
+            i += 1
+        else:
+            if i + 1 >= n:
+                break
+            a, b = src[i], src[i + 1]
+            i += 2
+            dist = a | ((b & 0x0F) << 8)
+            length = (b >> 4) + 3
+            start = len(out) - dist
+            for k in range(length):
+                at = start + k
+                out.append(out[at] if 0 <= at < len(out) else 0)
+    return bytes(out), i
+
+
+class Ps2SlzBlock:
+    """The 16-byte PlayStation 2 wrapper."""
+
+    def __init__(self, data):
+        if data[:3] != MAGIC:
+            raise SlzError("not an SLZ block")
+        self.data = data
+        self.method = data[3]
+        (self.compressed_size, self.uncompressed_size,
+         self.spare) = struct.unpack_from("<III", data, 4)
+
+    @property
+    def sound(self):
+        return (0 < self.compressed_size <= self.uncompressed_size
+                and self.spare == 0)
+
+    @property
+    def total_size(self):
+        return PS2_WRAPPER_SIZE + self.compressed_size
+
+    def decompress(self):
+        payload = self.data[PS2_WRAPPER_SIZE:
+                            PS2_WRAPPER_SIZE + self.compressed_size]
+        if self.method == PS2_STORED:
+            if self.compressed_size != self.uncompressed_size:
+                raise SlzError("method 0 with unequal sizes")
+            return payload
+        if self.method == PS2_LZ77:
+            out, used = unpack_ps2_lz77(payload, self.uncompressed_size)
+            if len(out) != self.uncompressed_size:
+                raise SlzError("method 1 produced %d of %d bytes"
+                               % (len(out), self.uncompressed_size))
+            # The encoder pads to a multiple of four, so a couple of bytes are
+            # expected to be left over; more than that means the walk drifted.
+            if not 0 <= self.compressed_size - used <= 8:
+                raise SlzError("method 1 consumed %d of %d bytes"
+                               % (used, self.compressed_size))
+            return out
+        raise SlzError("method %d is not decoded yet" % self.method)
+
+
+def ps2_blocks(blob, base=0):
+    """Yield every plausible PlayStation 2 SLZ block in a buffer."""
+    at = 0
+    while True:
+        at = blob.find(MAGIC, at)
+        if at < 0 or at + PS2_WRAPPER_SIZE > len(blob):
+            return
+        block = Ps2SlzBlock(blob[at:at + PS2_WRAPPER_SIZE])
+        if block.method <= 0x0F and block.sound:
+            end = at + block.total_size
+            if end <= len(blob):
+                yield base + at, Ps2SlzBlock(blob[at:end])
+        at += 1
+
+
 def read_block(path, offset, length=None):
     with open(path, "rb") as fh:
         fh.seek(offset)
@@ -335,6 +481,62 @@ def cmd_verify(args):
     return 1 if failures else 0
 
 
+def cmd_scan(args):
+    """Walk a PlayStation 2 image for SLZ blocks and decode what is readable.
+
+    The point of the census is the method histogram beside the payload tags:
+    the tags are what the title calls its assets, and before session 14 the
+    two PlayStation 2 discs in this repository were recorded as "SLZ and
+    nothing else this repository recognises".
+    """
+    size = os.path.getsize(args.image)
+    windows = args.windows
+    span = args.window
+    methods = {}
+    tried = {}
+    decoded = {}
+    tags = {}
+    walk_ok = walk_tot = 0
+    with open(args.image, "rb") as fh:
+        for index in range(windows):
+            base = (size - span) * index // max(windows - 1, 1)
+            fh.seek(base)
+            blob = fh.read(span)
+            found = list(ps2_blocks(blob, base))
+            for pos, block in found:
+                methods[block.method] = methods.get(block.method, 0) + 1
+                tried[block.method] = tried.get(block.method, 0) + 1
+                try:
+                    out = block.decompress()
+                except SlzError:
+                    continue
+                decoded[block.method] = decoded.get(block.method, 0) + 1
+                tag = bytes(out[:4])
+                tags[tag] = tags.get(tag, 0) + 1
+            for a, b in zip(found, found[1:]):
+                walk_tot += 1
+                if _align_up(a[0] + a[1].total_size, 4) == b[0]:
+                    walk_ok += 1
+    print("%s  (%.2f GiB, %d windows of %d MiB)"
+          % (args.image, size / float(1 << 30), windows, span >> 20))
+    print("blocks            : %d" % sum(methods.values()))
+    for method in sorted(methods):
+        print("  method %d        : %6d  decoded %d"
+              % (method, methods[method], decoded.get(method, 0)))
+    if walk_tot:
+        print("consecutive pairs : %d of %d land on the next block"
+              % (walk_ok, walk_tot))
+    if tags:
+        print("payload tags      :")
+        for tag, count in sorted(tags.items(), key=lambda kv: -kv[1])[:20]:
+            print("  %-8r %d" % (tag, count))
+    return 0
+
+
+def _align_up(value, to):
+    return (value + to - 1) // to * to
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(
         description="Decompressor for SLZ blocks (an XCompress/LZX wrapper).")
@@ -351,6 +553,13 @@ def main(argv=None):
         if name == "decompress":
             s.add_argument("output")
         s.set_defaults(func=func)
+
+    s = sub.add_parser("scan", help="census a PlayStation 2 image for SLZ blocks")
+    s.add_argument("image")
+    s.add_argument("--windows", type=int, default=8)
+    s.add_argument("--window", type=lambda x: int(x, 0), default=16 << 20,
+                   help="bytes read at each sample point")
+    s.set_defaults(func=cmd_scan)
 
     s = sub.add_parser("verify", help="bulk-decompress and self-check")
     s.add_argument("image")

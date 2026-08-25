@@ -8,11 +8,14 @@ warnings: that the tests are **asymmetric** — a hit on a versioned magic or on
 the engine namespace is conclusive, a miss proves very little — and that the
 platform layer is expected to differ on anything that is not an Xbox 360.
 
-Three specimens, chosen to hold the platform constant and vary the year, plus
-one that varies the platform while staying big-endian:
+Three specimens to begin with, chosen to hold the platform constant and vary
+the year, plus one that varies the platform while staying big-endian. Seven
+more arrived afterwards, and the list now spans fifteen years and six consoles:
 
 | Title | Year | Platform | Build |
 | --- | --- | --- | --- |
+| Star Ocean: Blue Sphere | 2001 | Game Boy Color | `STAROCEANGBBO2J`, Japan |
+| Star Ocean: Till the End of Time | 2003 | PlayStation 2 | `SLES_820.28`, PAL, disc 1 |
 | Radiata Stories | 2005 | PlayStation 2 | `SLUS_212.62`, USA |
 | Valkyrie Profile 2: Silmeria | 2006 | PlayStation 2 | `SLES_546.47`, PAL |
 | Infinite Undiscovery | 2008 | Xbox 360 | the baseline, `UD4` |
@@ -23,8 +26,8 @@ one that varies the platform while staying big-endian:
 | Beyond the Labyrinth | 2012 | Nintendo 3DS | `CTR-P-ALVJ`, Japan |
 | Phantasy Star Nova | 2014 | PlayStation Vita | `PCSG00351`, Japan, SEGA-published |
 
-**The answer is yes for six of the eight, no for one, and unanswerable for
-one.** What differs between the six is not whether it is the same engine but
+**The answer is yes for seven of the ten, no for two, and unanswerable for
+one.** What differs between the seven is not whether it is the same engine but
 how much of it is *readable*, and that turns out to be a different question
 with a different answer every time.
 
@@ -35,8 +38,10 @@ means the tools in this repository actually parsed the title's own data.
 
 | Title | Engine named | Formats shared | Readers open it | Settled by |
 | --- | --- | --- | --- | --- |
-| Radiata Stories, PS2 2005 | no | `SLZ` only | no | 26 254 sound `SLZ` blocks |
-| Valkyrie Profile 2, PS2 2006 | no | `SLZ` only | no | 25 431 sound `SLZ` blocks |
+| Blue Sphere, GBC 2001 | no | none | no | **nothing at all — not one hit** |
+| Star Ocean 3, PS2 2003 | no | `SLZ`, and `PACK` as a tag | `slz.py`, method 1 | `SLZ`/`SLE` in the executable, 1 566 sound blocks |
+| Radiata Stories, PS2 2005 | no | `SLZ` only | stored blocks only | 26 254 sound `SLZ` blocks |
+| Valkyrie Profile 2, PS2 2006 | no | `SLZ`, `DTT\0`, `LCTP` | `slz.py`, method 1 | 25 431 sound `SLZ` blocks |
 | Infinite Undiscovery, X360 2008 | `Aska::` + 1 740 RTTI names | *the baseline* | *the baseline* | — |
 | Star Ocean 4, X360 2009 | **`Aska::` in `SOZ.exe`** | `SLZ`, `PACK`, ASF, AAF, ACF, AIF, SNC, AAC | **yes, every one** | the namespace, then the readers |
 | Resonance of Fate, X360 2010 | no, RTTI stripped | `SLZ`/`SLE` and AIF headers in the executable | headers only | 182 sound `AAC ` containers |
@@ -47,14 +52,18 @@ means the tools in this repository actually parsed the title's own data.
 
 Three threads run the whole length of it:
 
-* **`SLZ`** is in every title from 2005 to 2016 that this repository could look
-  inside, in three header revisions that differ by one inserted word and one
-  moved constant.
+* **`SLZ`** is in every title from **2003** to 2016 that this repository could
+  look inside, in three header revisions that differ by one inserted word and
+  one moved constant. Session 14 read one of its PlayStation 2 codecs, so the
+  oldest thread is now also a readable one — see
+  [§11](#11-the-playstation-2-trio-2003-2005-and-2006).
 * **`AHSL`**, the shader toolchain, is in both Xbox 360 executables, in 30
   shipped files on the PlayStation 3 and 147 times in the Android library.
 * **The art naming** — `cNNN_NN_partM`, `pCol` primitives, Maya light names —
   is recognisable in every title including the one that shares no format at
-  all.
+  all. On the PlayStation 2 it is a *different* tool's naming: `Bip01 Pelvis`
+  and its relatives are 3ds Max Character Studio, so the studio moved from 3ds
+  Max to Maya between 2006 and 2008.
 
 ## 2. What each specimen gave up
 
@@ -194,33 +203,40 @@ Where a signature has a structural test, the second number is the **sound**
 count, and it is the only one worth reading: a bare four-byte magic turns up by
 chance about once per four gigabytes, and every image here is bigger than that.
 
-| Signature | Radiata 2005 | Valkyrie Profile 2 2006 | Infinite Undiscovery 2008 | Star Ocean 4 2009 | Resonance of Fate 2010 | Star Ocean 5 2016 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| MRON container | — | — | **6 873** / 6 261 | — | — | — |
-| SNC scene script | — | — | 7 | — | — | — |
-| AREA | — | — | 94 | — | — | — |
-| MINI | — | — | 44 | — | — | — |
-| SIG- signal | — | — | 2 909 | — | — | — |
-| ASF scene | — | — | 1 454 / **1 450** | 2 / 1 | 1 / 0 | 1 887 / **1 886** |
-| AAF animation | 8 | 12 | **6 763** | 305 | 2 | **5 553** |
-| ACF collision | — | — | **1 314** | 769 | 2 | 683 |
-| AIF image | — | — | 3 321 / **3 320** | 85 / 84 | 3 / 0 | 3 947 / **3 740** |
-| AAC audio | — | 3 / 0 | 9 080 / **708** | 11 681 / **6 379** | 185 / **182** | 22 / 0 |
-| SLZ wrapper | 26 275 / **26 254** | 25 531 / **25 431** | 8 104 / **8 082** | 26 531 / **26 498** | 21 / 0 | 19 583 / **10 155** |
-| AI node field | — | — | 33 / **33** | 1 / 0 | 1 / 0 | 5 / 0 |
-| `R:M:` node prefix | 100 † | 37 † | **877 637** | 1 | 1 | 1 |
-| pCol primitives | — | — | **10 357** | **747** | — | **163** |
-| `Tri_ace` node | — | — | 1 | — | — | — |
-| AHSL | 1 † | 7 † | — | — | 4 | 30 |
+| Signature | Star Ocean 3 2003 | Radiata 2005 | Valkyrie Profile 2 2006 | Infinite Undiscovery 2008 | Star Ocean 4 2009 | Resonance of Fate 2010 | Star Ocean 5 2016 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| MRON container | — | — | — | **6 873** / 6 261 | — | — | — |
+| SNC scene script | — | — | — | 7 | — | — | — |
+| AREA | — | — | — | 94 | — | — | — |
+| MINI | — | — | — | 44 | — | — | — |
+| SIG- signal | — | — | — | 2 909 | — | — | — |
+| ASF scene | 1 / 0 | — | — | 1 454 / **1 450** | 2 / 1 | 1 / 0 | 1 887 / **1 886** |
+| AAF animation | 1 | 8 | 12 | **6 763** | 305 | 2 | **5 553** |
+| ACF collision | 1 | — | — | **1 314** | 769 | 2 | 683 |
+| AIF image | 1 / 1 | — | — | 3 321 / **3 320** | 85 / 84 | 3 / 0 | 3 947 / **3 740** |
+| AAC audio | 3 / 0 | — | 3 / 0 | 9 080 / **708** | 11 681 / **6 379** | 185 / **182** | 22 / 0 |
+| SLZ wrapper | 55 653 / **53 201** | 26 275 / **26 254** | 25 531 / **25 431** | 8 104 / **8 082** | 26 531 / **26 498** | 21 / 0 | 19 583 / **10 155** |
+| AI node field | — | — | — | 33 / **33** | 1 / 0 | 1 / 0 | 5 / 0 |
+| `R:M:` node prefix | — | 100 † | 37 † | **877 637** | 1 | 1 | 1 |
+| pCol primitives | — | — | — | **10 357** | **747** | — | **163** |
+| `Tri_ace` node | — | — | — | 1 | — | — | — |
+| AHSL | — | 1 † | 7 † | — | — | 4 | 30 |
 
 Dashes are counts at or below chance. Star Ocean 5's column is its decrypted
-package run, 11.2 GiB, not a disc image. Beyond the Labyrinth and Star Ocean:
-Anamnesis are not in the table: the first scores nothing anywhere
-([§9](#9-beyond-the-labyrinth--the-first-specimen-that-says-no)) and the second
-is 58 MB of APK whose evidence is in its library
+package run, 11.2 GiB, not a disc image. Beyond the Labyrinth, Star Ocean: Blue
+Sphere and Star Ocean: Anamnesis are not in the table: the first two score
+nothing anywhere ([§9](#9-beyond-the-labyrinth--the-first-specimen-that-says-no),
+[§12](#12-star-ocean-blue-sphere--the-second-specimen-that-says-no)) and the
+third is 58 MB of APK whose evidence is in its library
 ([§8](#8-star-ocean-anamnesis-and-what-it-cost-the-tool)).
 
-**† Checked, and false.** Two rows looked tempting on the PlayStation 2 pair
+**Star Ocean 3's column is the most extreme in the table**: 53 201 sound `SLZ`
+blocks, more than Radiata Stories and Valkyrie Profile 2 put together, and
+nothing else above chance anywhere on 4.34 GiB. That is what a disc looks like
+when the wrapper is the only thing the sweep can see through — and it is why
+reading one of the codecs mattered more than adding another row.
+
+**† Checked, and false.** Two rows looked tempting on the 2005 and 2006 discs
 and are not real. Every one of Radiata's 100 `R:M:` hits sits inside the same
 self-similar run — `R:M:RAM:m:Y:S:YIS:YIYL|IhIyLh` — and Valkyrie Profile 2's
 37 sit inside `R:M:R:M@R3F@W-D3-`; neither is a node name. Their `AHSL` hits
@@ -251,8 +267,9 @@ exists for now. Its scenes, models and animations remain invisible.
 **Star Ocean 5** carries the payload magics in quantity and big-endian, and
 they do not open — see [§2](#2-what-each-specimen-gave-up).
 
-**The PlayStation 2 pair** are `SLZ` and nothing else this repository
-recognises; [§11](#11-the-playstation-2-pair-2005-and-2006) has them.
+**The PlayStation 2 trio** show `SLZ` and nothing else *to a sweep*. What is
+inside those blocks is another matter since session 14 read method 1;
+[§11](#11-the-playstation-2-trio-2003-2005-and-2006) has them.
 
 ## 6. The readers against Star Ocean 4
 
@@ -521,29 +538,34 @@ which is not reading a format, and this repository stops there.
 So Nova is recorded as: **same file-naming convention, same middleware, payloads
 not inspectable.**
 
-## 11. The PlayStation 2 pair, 2005 and 2006
+## 11. The PlayStation 2 trio: 2003, 2005 and 2006
 
-*Radiata Stories* (SLUS-21262, the USA disc) and *Valkyrie Profile 2: Silmeria*
-(SLES-54647, the PAL disc) sit three and two years in front of Infinite
-Undiscovery, on a little-endian MIPS console, and they are the specimens that
-explain a field the later ones made unreadable.
+*Star Ocean: Till the End of Time* (SLES-820.28, PAL disc 1), *Radiata Stories*
+(SLUS-21262, USA) and *Valkyrie Profile 2: Silmeria* (SLES-54647, PAL) sit
+five, three and two years in front of Infinite Undiscovery, on a little-endian
+MIPS console. They are the specimens that explain a field the later ones made
+unreadable — and, since session 14, the only ones outside the Xbox 360 whose
+compressed data this repository can actually open.
 
-Both discs are built the same way: an ISO 9660 filesystem holding three files —
-the executable, Sony's `IOPRP300.IMG` and `SYSTEM.CNF` — and four gigabytes of
-data in raw sectors outside it, addressed by LBA.
+All three discs are built the same way: an ISO 9660 filesystem holding three
+files — the executable, Sony's `IOPRP*.IMG` and `SYSTEM.CNF` — and four
+gigabytes of data in raw sectors outside it, addressed by LBA. Star Ocean 3
+establishes that layout in 2003.
 
-### `SLZ` is theirs already
+### `SLZ` is theirs already, and earlier than was thought
 
-| | Radiata Stories | Valkyrie Profile 2 |
-| --- | ---: | ---: |
-| `SLZ` magics | 26 275 | 25 531 |
-| of those, sound | **26 254** | **25 431** |
-| everything else | chance | chance |
+| | Star Ocean 3 | Radiata Stories | Valkyrie Profile 2 |
+| --- | ---: | ---: | ---: |
+| `SLZ` magics, sampled | 1 641 | 26 275 | 25 531 |
+| of those, sound | **1 566** | **26 254** | **25 431** |
+| consecutive blocks landing on the next | **695 / 727** | — | — |
+| everything else | chance | chance | chance |
 
-The name is in the executables too, and in the same shape in both: `SLZ` and
-`SLE` as adjacent eight-byte-aligned constants, twice per binary. The three
-Xbox 360 titles carry the same pair four-byte-aligned and the other way round,
-`SLE` then `SLZ`. Five titles, three CPUs, 2005 to 2010.
+The name is in the executables too, and in the same shape in all three: `SLZ`
+and `SLE` as adjacent eight-byte-aligned constants, twice per binary. Star
+Ocean 3 puts them at `0x4DD40` and `0x4DE30`. The three Xbox 360 titles carry
+the same pair four-byte-aligned and the other way round, `SLE` then `SLZ`.
+**Six titles, three CPUs, 2003 to 2010.**
 
 ### And it explains Infinite Undiscovery's fourth byte
 
@@ -554,7 +576,7 @@ single specimen could not:
 | | |
 | --- | --- |
 | `+0x00` | `SLZ` |
-| `+0x03` | **method** — 0 stored, 3 compressed |
+| `+0x03` | **method** — 0 stored, 1–3 compressed |
 | `+0x04` | compressed size, little-endian |
 | `+0x08` | uncompressed size |
 | `+0x0C` | zero |
@@ -569,7 +591,7 @@ disc:
 | compressed ≤ uncompressed | **661 of 661** |
 | method 0 with the two sizes equal | **68 of 68** |
 
-Between 2005 and 2008 **one word was inserted at `+0x04`**: the size pair moves
+Between 2006 and 2008 **one word was inserted at `+0x04`**: the size pair moves
 to `+0x08` and `+0x0C`, the zero moves with it, and everything else stays where
 it was. That is the whole difference.
 
@@ -580,16 +602,101 @@ stored blocks agreed. The 2005 disc settles it: 68 blocks that say 0 have their
 two sizes equal and their payload in the clear, one of them opening with
 `SEQW`. Infinite Undiscovery is the exception, not the rule.
 
-### What is not there
+The three titles do not use the methods the same way, which is itself worth
+recording:
 
-Neither disc carries a single sound `ASF `, `AIF `, `ACF `, `AAF `, `MRON` or
-`AI node field`. No Maya node names, no `Tri_ace`, no `AHSL` — the hits for
-those are inside repeating runs and are listed as false in
-[§5](#5-what-the-sweep-found). Whatever these two games call their scenes,
-textures and animations, it is not what the 2008 disc calls them, and it is
-behind `SLZ` where a sweep cannot see it.
+| Method | Star Ocean 3 | Radiata Stories | Valkyrie Profile 2 |
+| --- | ---: | ---: | ---: |
+| 0, stored | — | 14 | 2 |
+| 1, LZ77 | 152 | **none, anywhere** | 153 |
+| 2 | 482 | 2 | 390 |
+| 3 | 1 505 | 827 | 333 |
 
-So the lineage the evidence actually supports is: **the compression wrapper is
-the oldest thing in the engine**, older than the container, older than the
-payload formats, older than the name ASKA is attached to here. Everything else
-in this document is younger than it.
+### Method 1 is tri-Ace's own LZ77, and it opens
+
+Session 14 read it. The specification and the three independent measurements
+that fix its three fields are in
+[slz.md §2b](formats/slz.md#2b-the-playstation-2-codec-method-1); the short
+version is byte-wide flags read from bit 0 up, literals on 1, and a two-byte
+back-reference carrying a 12-bit distance and a 4-bit length biased by 3.
+
+**152 of 152 blocks on the 2003 disc and 153 of 153 on the 2006 disc decode to
+exactly the size their header states, with no failures and no special cases.**
+
+### So the discs are not silent after all
+
+What comes out of them is a vocabulary, and it is not Infinite Undiscovery's —
+the census is in
+[slz.md §2c](formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets).
+`FAS\0`, `RTA\0` and `FPS\0` are the three commonest payloads on all three
+discs. Three of the rarer ones reach back into open questions about the Xbox
+360 game: **`DTT\0`**, which is byte for byte the payload of Infinite
+Undiscovery's unread `TTD-` resource, shipped *stored* on the 2006 disc;
+**`LCTP`**, which is `PTCL` backwards and is one of the ASF chunks nobody has
+opened; and **`DMM\0`**, which is `MMD` backwards and is one of Star Ocean 4's
+three unread magics.
+
+One row corrects §6 of this document. **`PACK` is not new in 2009.** It is the
+leading literal of roughly 190 of the 1 987 blocks sampled on the 2003 disc
+that do not yet decode. Whether the header is the same as Star Ocean 4's cannot be
+checked until methods 2 and 3 open, so what is established is the tag and not
+the container.
+
+### The pipeline was 3ds Max, not Maya
+
+The decoded payloads name their bones, and the names are not the ones the later
+discs use:
+
+```
+Bip01           Bip01 Pelvis     Bip01 Spine1     Bip01 L Clavicle
+Bip01 Neck      Bip01 L Thigh    Bip01 R Finger3  Bip01 Footsteps
+DummyBox01      MOVEBOX          CTRL01           RHAND
+```
+
+`Bip01` and its children are **3ds Max Character Studio's** biped, exactly as
+that tool names them, on both the 2003 and the 2006 disc. Infinite Undiscovery
+and Star Ocean 4 leave Maya's naming instead — the `R:M:` prefix, `pCol`
+primitives, `AAmbientLight1`. So the row "the art naming is recognisable in
+every title" holds, and it hides a change of tool: **tri-Ace moved from 3ds Max
+to Maya between Valkyrie Profile 2 and Infinite Undiscovery.**
+
+### What is still not there
+
+No Maya node names, no `Tri_ace`, no `AHSL`, no versioned magic — 56 candidates
+for the `XXXXnn.n` pattern in 128 MiB of Star Ocean 3's data, every one of them
+a digit run inside compressed data. And methods 2 and 3, which are 1 987 of the
+2 139 blocks sampled on that disc, remain closed.
+
+So the lineage the evidence supports is: **the compression wrapper is the
+oldest thing in the engine**, older than the container, older than the payload
+formats, older than the name ASKA is attached to here — and now datable to
+2003 rather than 2005. Everything else in this document is younger than it.
+
+## 12. Star Ocean: Blue Sphere — the second specimen that says no
+
+Game Boy Color, 2001, Japan only. tri-Ace developed it and Enix published it,
+which makes it the earliest title anyone attributes to the studio's console
+lineage and, at 4 MiB on an 8-bit handheld, the least likely specimen here.
+
+**It scores nothing.** `aska.py identify` over the whole ROM returns not one
+hit of any signature, in either byte order — the only specimen that manages a
+completely empty table, Beyond the Labyrinth included. The targeted checks
+agree: no `SLZ`, no `SLE`, no `Aska`, no `AHSL`, no `R:M:`, no `pCol`, no
+`Tri_ace`, and zero matches for the general versioned-magic pattern. There is
+not one readable string in the image; all 19 350 runs of six or more printable
+bytes are tile data.
+
+The cartridge header is the whole of what the ROM says about itself: title
+`STAROCEANGBBO2J`, licensee `B4` (Enix), MBC5 with 32 KB of battery-backed RAM,
+Super Game Boy support, Japan, version 1.0.
+
+Unlike Beyond the Labyrinth — which shares no format but is unmistakably
+tri-Ace in its art naming and its container family — Blue Sphere shares nothing
+at any level. That is the expected answer for a 2001 handheld title and it is
+recorded so that the ladder has a specimen at the bottom of it: **a real no
+looks like an empty table, and an empty table is what one looks like.**
+
+The one deliberate convention the ROM does show is that every non-empty bank
+begins with its own bank number — 242 of 255, the thirteen exceptions being
+entirely zero-filled. That is common Game Boy practice rather than a tri-Ace
+habit, and it is offered as an observation and not as evidence.

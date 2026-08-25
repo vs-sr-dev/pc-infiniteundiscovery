@@ -1,11 +1,15 @@
 # SLZ — the compressed resource wrapper
 
-**The oldest thing in the engine.** It is on Radiata Stories' PlayStation 2
-disc in 2005, three years before Infinite Undiscovery, and still in Star Ocean
-5 in 2016 — older than the container, older than the payload formats, older
-than the name ASKA is attached to in this repository. See
-[§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
+**The oldest thing in the engine.** It is on Star Ocean: Till the End of
+Time's PlayStation 2 disc in 2003, five years before Infinite Undiscovery, and
+still in Star Ocean 5 in 2016 — older than the container, older than the
+payload formats, older than the name ASKA is attached to in this repository.
+See [§2a](#2a-three-revisions-and-what-the-oldest-one-explains) and
 [aska-across-titles.md](../aska-across-titles.md).
+
+**One of the PlayStation 2 codecs is now readable.** Method 1 is tri-Ace's own
+LZ77, and [§2b](#2b-the-playstation-2-codec-method-1) specifies it. Methods 2
+and 3 are not.
 
 Most of Infinite Undiscovery's bulk is compressed. Every `MESH`, `MTEX`,
 `SCE-`, `SKAC` and `APAC` resource sits behind a header whose first three bytes
@@ -83,10 +87,10 @@ that sits before the counted region.
 The name is the same in every tri-Ace title from 2005 on. The header is not,
 and the differences are small enough to line up in one table.
 
-| | PlayStation 2, 2005–06 | Xbox 360, 2008–10 | PlayStation 3, 2016 |
+| | PlayStation 2, 2003–06 | Xbox 360, 2008–10 | PlayStation 3, 2016 |
 | --- | --- | --- | --- |
 | `0x00` | `SLZ` | `SLZ` | `SLZ` |
-| `0x03` | **method** — 0 stored, 3 compressed | 4, always | **method** — 0 stored, 1–3 compressed |
+| `0x03` | **method** — 0 stored, 1–3 compressed | 4, always | **method** — 0 stored, 1–3 compressed |
 | `0x04` | compressed size | `0x20` | `0x00010025` |
 | `0x08` | uncompressed size | compressed size | compressed size |
 | `0x0C` | zero | uncompressed size | uncompressed size |
@@ -96,7 +100,7 @@ and the differences are small enough to line up in one table.
 | `0x20` | | | payload |
 | byte order | little-endian | big-endian | big-endian |
 
-Between 2005 and 2008 **one word was inserted at `0x04`**. The size pair and
+Between 2006 and 2008 **one word was inserted at `0x04`**. The size pair and
 the zero behind it move down by four bytes and nothing else changes. Between
 2008 and 2016 the `0x20` moves from `0x04` to `0x14`, where it is genuinely the
 header size, and XCompress goes away — which it had to, being an Xbox library.
@@ -129,14 +133,165 @@ are an error. With that one change, 797 of Star Ocean 4's blocks decompress
 into `AAF`, `ASF`, `ACF`, `AIF` and `-CNS` payloads that their own readers then
 parse.
 
-### The codecs behind the two later revisions are open
+### What is behind the two later revisions
 
-XCompress is only the Xbox 360 answer. What the PlayStation 2 and PlayStation 3
-revisions put behind their headers is not decoded: not XCompress, and not plain
-LZSS — 480 combinations of offset width, length width, byte order, minimum
-match, flag polarity and bit order were tried against 60 PlayStation 3 blocks
-and none decoded one. Their stored blocks read fine, which is how the method
-byte was identified in the first place.
+XCompress is only the Xbox 360 answer, and it is an Xbox library, so it could
+never have been the other two.
+
+**The PlayStation 2 method 1 is solved** — [§2b](#2b-the-playstation-2-codec-method-1).
+It decodes every block that claims it, in two titles three years apart, with no
+failures.
+
+**Methods 2 and 3 are not.** Neither is stored, neither is method 1 under
+another number, and neither is plain LZSS: 480 combinations of offset width,
+length width, byte order, minimum match, flag polarity and bit order were tried
+against 60 PlayStation 3 blocks and none decoded one. What they cost is most of
+the disc — 1 987 of the 2 139 blocks sampled on Star Ocean 3 use one of the
+two, and Radiata Stories uses method 3 almost exclusively.
+
+Their leading bytes are not useless, though. A compressed block begins with a
+flag byte and its first tokens are ordinarily literals, so **the payload magic
+is legible even when the block is not** — which is where most of the vocabulary
+in [§2c](#2c-what-the-playstation-2-titles-call-their-assets) comes from.
+
+**The PlayStation 3 codecs are still open.** They carry the same method numbers
+0–3 and the same stored method 0, but method 1 there is not the method 1 below:
+tried against Star Ocean 5's blocks it decodes none.
+
+## 2b. The PlayStation 2 codec, method 1
+
+An LZ77 with byte-wide flags, and nothing more — no ring buffer, no entropy
+coding, no end marker. The decoder stops when it has produced the number of
+bytes the header states.
+
+A **flag byte** carries eight tokens, read from the least significant bit up:
+
+| Bit | Token |
+| --- | --- |
+| 1 | a literal — copy the next byte |
+| 0 | a back-reference — two bytes follow |
+
+A **back-reference** is two bytes, `a` then `b`:
+
+| | |
+| --- | --- |
+| distance | <code>a &#124; ((b & 0x0F) << 8)</code> — 1 to 4 095, counted back from the current end of the output |
+| length | `(b >> 4) + 3` — 3 to 18 |
+
+Overlapping copies are ordinary: a distance of 1 is how a run of identical
+bytes is written, and it is what fills the zero padding in every file header.
+
+The encoder pads the compressed stream to a multiple of four, so the walk ends
+two or three bytes short of the stated compressed size. Anything more than
+eight bytes short means it drifted, and `slz.py` treats that as an error.
+
+### How each field was pinned down
+
+None of this is guessable, and each field was fixed by a different measurement
+rather than by trying variants until something looked plausible.
+
+**The flag framing** comes from a block whose plaintext begins
+`so3mclib 1.80i`. Reading the first payload byte as a flag and taking bit 0 as
+"literal" makes `0xFF` mean eight literals — and under that reading the parse
+lands on a `0xFF` byte, three times consecutively, exactly where the next flag
+belongs. A wrong framing desynchronises within a token or two.
+
+**The length field** comes from the output landing on *exactly* the stated
+uncompressed size in 12 of 12 blocks. That test is blind to the distance field
+— a back-reference of the wrong length changes how much is produced, a
+back-reference from the wrong place does not — so it isolates the length nibble
+on its own.
+
+**The distance field** comes from a known-plaintext search. Star Ocean 3's
+skeletons are 3ds Max bipeds, so the plaintext must contain `Bip01 `. Every
+composition of the two bytes into a 12-bit distance was tried, against a
+sliding window and against a ring buffer at every one of its 4 096 possible
+start positions — 8 194 candidates. **One produces the string, and it produces
+it eleven times in the first 6 KB.** The rest produce it never.
+
+### Status
+
+| | Star Ocean 3, 2003 | Valkyrie Profile 2, 2006 |
+| --- | ---: | ---: |
+| method 1 blocks sampled | 152 | 153 |
+| decode to exactly the stated size | **152** | **153** |
+| failures | 0 | 0 |
+
+Radiata Stories writes no method 1 at all in 64 sample windows across its disc,
+which is its own small oddity: it is the middle title of the three and the only
+one that does not use the codec.
+
+## 2c. What the PlayStation 2 titles call their assets
+
+Before this, the PlayStation 2 discs were recorded as "`SLZ` and nothing else
+this repository recognises". They have a vocabulary, and it is not Infinite
+Undiscovery's. Some of it comes out of decoded method-0 and method-1 blocks;
+the rest is read off the leading literals of blocks that still do not open:
+
+| Payload magic | Reversed | Seen on | Related to |
+| --- | --- | --- | --- |
+| `FAS\0` | `SAF` | SO3, VP2, Radiata | the commonest payload on all three |
+| `RTA\0` | `ATR` | SO3, VP2, Radiata | second commonest |
+| `FPS\0` | `SPF` | SO3, VP2, Radiata | |
+| `FIS\0` | `SIF` | SO3, VP2 | |
+| `LCTP` | `PTCL` | SO3, VP2, Radiata | Infinite Undiscovery's ASF `ptcl` chunk |
+| `DMM\0` | `MMD` | SO3 | Star Ocean 4's `MMD ` |
+| `RMAC` | `CAMR` | VP2 | a camera |
+| `DTT\0` | `TTD` | VP2, stored | Infinite Undiscovery's `TTD-`, byte for byte |
+| `PACK` | — | SO3 | Star Ocean 4's container tag, six years earlier |
+| `SEQW`, `RLF2` | — | Radiata, stored | audio |
+| `so3mclib 1.80i` | — | SO3 | a library stamp, not a magic |
+
+The "reversed" column is the convention the container already uses for itself:
+Infinite Undiscovery writes `MRON` for NORM and `-CNS` for SNC-, and these
+three-letter names carry their padding byte in the same place, so a
+little-endian build writes `\0`, then the name backwards.
+
+### The `F?S` family, and what the two commonest payloads look like
+
+Three of the magics share a shape, and the shape is the interesting part:
+
+| Magic | Star Ocean 3 | Radiata | Valkyrie Profile 2 |
+| --- | ---: | ---: | ---: |
+| `FAS\0` | 96 | seen | 346 |
+| `FPS\0` | 153 | 36 | 72 |
+| `FIS\0` | 51 | — | 1 |
+
+`F?S` as stored is `S?F` read the other way, which sits exactly where the Xbox
+360's `A?F` family sits — `ASF `, `AIF `, `AAF `, `ACF `, the A for Aska, a
+letter for the content, an F for file. Whether `SAF` became `ASF ` is not
+something these counts can settle, and it is recorded as a resemblance rather
+than an identification.
+
+What is measured is the structure of the two commonest, both of which decode
+completely under method 1:
+
+**`FAS\0`**, header then a name, all little-endian:
+
+| Offset | Field | example |
+| --- | --- | --- |
+| `0x00` | `FAS\0` | |
+| `0x04` | a size | `0x6DA0` |
+| `0x08` | zero | |
+| `0x0C` | that size plus `0x10` | `0x6DB0` |
+| `0x10` | a 16-byte name field | `Bip01` |
+
+After it, records on a **144-byte** pitch, each carrying a node name — 45 names
+in the 28 KB specimen, `Bip01 Pelvis` through `DummyBox22` and `CTRL01`.
+
+**`RTA\0`** states its own total size at `0x04` — exactly the file length, which
+`FAS\0` does not — then two counts and two offsets, and its name table is on a
+**20-byte** pitch. A file that names the same bones as a scene and then carries
+float arrays behind offset tables is shaped like an animation, which would put
+`ATR` where `AAF ` later sits, but no field beyond the header has been checked.
+
+Two of those rows matter beyond the census. **`DTT\0` is the payload of
+`TTD-`**, the one resource tag on Infinite Undiscovery's disc with no reading
+at all — and Valkyrie Profile 2 ships it stored, in the clear, two years
+earlier. **`PACK`** was recorded as new in Star Ocean 4 in 2009; it is the
+leading literal of roughly 190 of the 1 987 blocks on the 2003 disc that do
+not yet decode. Its header cannot be checked until methods 2 and 3 open, so that is
+a tag six years early and not yet a container six years early.
 
 ## 3. Frames
 

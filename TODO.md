@@ -22,6 +22,12 @@ Star Ocean 4's scene scripts parse with the same reader, but its opcode
 *numbering* is a different table, so a second title cannot name Infinite
 Undiscovery's opcodes.
 
+Session 14 added two more titles and, unplanned, **read one of the PlayStation
+2 compression codecs**, which turned three discs from a census into a reading.
+That moved questions 22 and 24 and gave questions 3, 12 and 25 an older
+specimen each. The best remaining lead on that front is question 22's second
+half: methods 2 and 3, which hold most of all three PlayStation 2 discs.
+
 ## Now the main line of work
 
 **1. What the SNC opcodes do.** This has to be answered inside this game:
@@ -47,7 +53,10 @@ beside them. Hair and skirt simulation is the obvious reading and `Aska::Dynamic
 is in the binary to run it, but nothing is decoded yet.
 
 **3. The ASF chunks nobody has opened:** `ptcl`/`pprn`/`pani` (particles), and
-`modf`, `extl`, `PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr`, `anim`.
+`modf`, `extl`, `PAIF`, `AAIF`, `ACHF`, `glbl`, `mdfr`, `anim`. Session 14
+found `ptcl` outside a scene: on all three PlayStation 2 discs it is a payload
+in its own right, written `LCTP`, and on two of them it sits behind a codec
+that now decodes.
 
 **4. The material leftovers**, small and self-contained after session 8: the
 two fields in a texture reference at `+0x08` and `+0x0C`, neither of which
@@ -93,7 +102,11 @@ stored vertices are not in.
 11. **The AIF flags at `0x34`** (`0x500`, `0x200`, `0x40400`, zero).
 
 12. **`TTD-`**, whose payload begins `DTT\0`. It is the last resource tag
-    on the disc with no reading at all.
+    on the disc with no reading at all — but no longer the only copy of it.
+    Valkyrie Profile 2 ships a `DTT\0` payload **stored**, uncompressed, in
+    2006, and session 14's `slz.py scan` finds it. An unread format with an
+    older specimen in the clear is a much better position than an unread
+    format with one.
 
 13. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
     the rest of that `0x16000` header as the compiled shader library, 70 of the
@@ -146,14 +159,16 @@ stored vertices are not in.
 
 ## Beyond this game — answered, and what it left open
 
-**Eight titles were tested and six of them are the same engine**, with the
+**Ten titles were tested and seven of them are the same engine**, with the
 argument and every measurement in
 [docs/aska-across-titles.md](docs/aska-across-titles.md):
 
 | | |
 | --- | --- |
+| Star Ocean: Blue Sphere, GBC 2001 | **no** — not one hit of any signature, the only empty table so far |
+| Star Ocean 3, PS2 2003 | `SLZ`/`SLE` in the executable, 1 566 sound blocks, and 152 of them decoded |
 | Radiata Stories, PS2 2005 | 26 254 sound `SLZ` blocks |
-| Valkyrie Profile 2, PS2 2006 | 25 431 sound `SLZ` blocks |
+| Valkyrie Profile 2, PS2 2006 | 25 431 sound `SLZ` blocks, 153 of them decoded |
 | Star Ocean 4, X360 2009 | `Aska::` in the executable, and every reader here parses its payloads |
 | Resonance of Fate, X360 2010 | `SLZ`/`SLE` and AIF headers in the executable, 182 sound `AAC ` containers on the disc |
 | Star Ocean 5, PS3 2016 | `SLZ` blocks whose walk closes exactly, inside CRI `CPK` archives |
@@ -161,10 +176,11 @@ argument and every measurement in
 | Beyond the Labyrinth, 3DS 2012 | **no** — nothing above chance, Nintendo's asset formats, no engine name |
 | Phantasy Star Nova, Vita 2014 | unanswerable — the naming convention matches, the payloads are behind a second encryption layer |
 
-The single most durable thing found is **`SLZ`**: present from 2005 to 2016
-across three CPUs, in three header revisions. The 2005 disc is what identifies
-the byte at `+0x03` as a compression method rather than a version, which one
-specimen alone could not settle.
+The single most durable thing found is **`SLZ`**: present from **2003** to
+2016 across three CPUs, in three header revisions. The 2005 disc is what
+identifies the byte at `+0x03` as a compression method rather than a version,
+which one specimen alone could not settle; the 2003 disc is what dates the
+wrapper, and one of its three codecs now decodes.
 
 The questions that came out of it, none of which is about this disc:
 
@@ -173,22 +189,37 @@ The questions that came out of it, none of which is about this disc:
     `0x10`. Something sits between the magic and the chunks, and 58 of 613
     sampled headers carry the tag `PS3 `.
 
-22. **The codecs behind `SLZ` on PlayStation 2 and PlayStation 3.** The method
-    byte selects one of three on both; only method 0, stored, is readable. It
-    is not XCompress, and not plain LZSS.
+22. **The codecs behind `SLZ` on PlayStation 2 and PlayStation 3.** Half
+    answered. **PlayStation 2 method 1 is solved** — tri-Ace's own LZ77,
+    specified in [docs/formats/slz.md §2b](docs/formats/slz.md#2b-the-playstation-2-codec-method-1),
+    decoding 152 of 152 blocks on the 2003 disc and 153 of 153 on the 2006 one.
+    **Methods 2 and 3 are not**, and they are 1 987 of the 2 139 blocks
+    sampled, so most of all three discs is still shut. Neither is method 1
+    under another number. The way in is probably the MIPS decompressor in
+    `SLES_820.28`, which is 751 KB and disassemblable. The **PlayStation 3**
+    methods are separately open: same numbering, same stored method 0, and
+    method 1 there is not this method 1 — tried against Star Ocean 5's blocks
+    it decodes none.
 
 23. **Resonance of Fate's container.** The executable proves the engine and its
     audio containers are on the disc, but its scenes, models and animations are
     invisible: every other signature scores zero sound and both containers are
     entropy 8.00 everywhere sampled.
 
-24. **What the PlayStation 2 pair call their assets.** Both discs are `SLZ` and
-    nothing else this repository recognises. Whatever is inside those 26 000
-    blocks is the 2005 vocabulary, and the codec question above is in the way
-    of reading it.
+24. **What the PlayStation 2 titles call their assets.** *Answered for what
+    method 1 holds*, in
+    [docs/formats/slz.md §2c](docs/formats/slz.md#2c-what-the-playstation-2-titles-call-their-assets):
+    `SAF`, `ATR`, `SPF`, `PTCL`, `MMD`, `CAMR`, `TTD`, and `PACK` as a tag six
+    years before Star Ocean 4. What is left is a **reader** rather than a
+    decompressor. `SAF` and `ATR` are the two commonest payloads on all three
+    discs, both open completely, and both carry a 3ds Max biped skeleton and a
+    node name table; whether `SAF` is the ancestor of `ASF ` is a question the
+    structure can answer and session 14 did not ask.
 
 25. **`EXD\0`, `mcd `, `MMD `** — three resource magics in Star Ocean 4's data
-    with no reading here. `EXD\0` is the commonest payload in the sample.
+    with no reading here. `EXD\0` is the commonest payload in the sample. One
+    of the three is older than it looked: `MMD` is on Star Ocean 3's 2003 disc,
+    written `DMM\0`.
 
 26. **The mobile class inventory.** `libSOA.so` carries 26 378 mangled `Aska`
     symbols resolving to 5 960 distinct two-level names — methods and members,

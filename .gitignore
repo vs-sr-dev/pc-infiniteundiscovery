@@ -13,6 +13,10 @@
 *.apk
 *.ipa
 *.obb
+*.gb
+*.gbc
+*.3ds
+*.cpk
 iso/
 
 # Anything extracted from a disc
