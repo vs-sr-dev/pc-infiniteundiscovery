@@ -85,6 +85,7 @@ Reproducing
 
 import argparse
 import json
+import math
 import os
 import re
 import struct
@@ -288,6 +289,33 @@ def above_chance(size):
     return max(4, 8.0 * size / float(1 << 32))
 
 
+def above_chance_sound(size):
+    """The same bar, for a signature that *does* have a structural test.
+
+    Section 16 of docs/aska-across-titles.md: the size correction added after
+    Tales of Graces went into the branch that needed it less. A signature with
+    no structural test was measured against chance; a signature *with* one was
+    judged by `hit.sound > 0` with no size term at all, so a single sound match
+    was conclusive on a file of any size. On Tales of Xillia -- 6.95 GB -- four
+    such matches landed inside Bink video and the verdict came out positive.
+
+    A structural test cuts the chance rate by orders of magnitude but does not
+    abolish it: the following field still has to look plausible, and on a
+    multi-gigabyte medium a few kilobytes of arbitrary data will oblige. So the
+    same 8x-of-expected rule applies here, with a floor of **one** rather than
+    four, because that is what the structural test buys.
+
+      101,922,396 bytes (an Android package)  ->  1
+        6,949,961,728 bytes (a PS3 disc)      ->  12.9
+
+    The floor of one is the point on a small medium and the ceiling is the
+    point on a large one. On a hundred-megabyte package a single sound hit is
+    real -- expected count 0.024 -- and a zero is a strong negative; on a
+    seven-gigabyte disc four sound hits are not enough and never were.
+    """
+    return max(1, 8.0 * size / float(1 << 32))
+
+
 def sweep(path, keep=4, progress=None):
     """One pass over the file, collecting every signature at once."""
     pattern = re.compile(b"|".join(b"(" + p + b")" for _, p, _ in SIGNATURES))
@@ -378,16 +406,19 @@ def cmd_identify(args):
     print("  \"sound\" counts the matches whose following field has a plausible")
     print("  shape. Where a signature has such a test, only sound matches are")
     print("  counted towards the verdict -- a bare four-byte magic turns up by")
-    print("  chance about once per four gigabytes. Where there is no such test,")
-    print("  a signature needs %d hits on a file this size to count at all."
+    print("  chance about once per four gigabytes.")
+    print("  On a file this size a signature needs %d sound matches to count if"
+          % int(math.ceil(above_chance_sound(size))))
+    print("  it has a structural test, and %d matches if it has none."
           % int(above_chance(size)))
 
     print()
     found = {}
     for hit in hits:
         if hit.checked:
-            # A signature with a structural test is judged on that test alone.
-            strong = hit.sound > 0
+            # A signature with a structural test is judged on that test -- but
+            # against chance, not against zero. See above_chance_sound().
+            strong = hit.sound >= above_chance_sound(size)
         else:
             # One without a test is judged against chance. A four-byte magic
             # turns up about once per 4 GiB, so on a disc image a count of one

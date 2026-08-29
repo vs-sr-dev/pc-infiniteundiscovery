@@ -68,6 +68,7 @@ means the tools in this repository actually parsed the title's own data.
 | Star Ocean 5, PS3 2016 | not reachable | `SLZ`, ASF/AAF/ACF/AIF magics, `AHSL` | no, envelope changed | `SLZ` walking exactly |
 | Star Ocean: Anamnesis, Android 2016 | **46 507 mangled `Aska`** | `aska0000.bin`, `AHSL`, reversed AIF | one texture header | the namespace, overwhelmingly |
 | *Eternal Sonata*, X360 2007 — tri-Crescendo | no, and no RTTI | **the method byte and the magic style** — the codec turned out to be two public routines, not tri-Ace's | `vmtoc.py`, all four methods | the whole index decoding exactly |
+| *Tales of Luminaria*, Android 2021 — COLOPL | no | **none — not one signature in any encoding** | no, there is nothing to open | **nothing at all: an empty table over 299,304,225 bytes** |
 
 Three threads run the whole length of it:
 
@@ -1153,3 +1154,113 @@ was reporting noise as a finding, and this one is fixing half of the second.*
 *Tales of Xillia* (PlayStation 3, 2011, Namco Tales Studio) runs the studio's
 own `TL` engine, compresses with an LZMA wrapper of its own called `TLZC`, and
 has nothing of tri-Ace's on it.
+
+
+## 16. The verdict rule is fixed, and the twelfth specimen is the one that shows why
+
+**Reported and fixed from outside**, by
+[android-talesofluminaria-doc](https://github.com/vs-sr-dev/android-talesofluminaria-doc),
+which ran `aska.py identify` over a 101,922,396-byte Android package and over
+its 299,304,225 expanded bytes.
+
+[§15](#15-the-verdict-rule-was-fixed-in-one-branch-and-not-the-other) says what
+the defect is and what the fix should be. This is the fix:
+
+```python
+def above_chance_sound(size):
+    """The bar for a signature that *does* have a structural test."""
+    return max(1, 8.0 * size / float(1 << 32))
+```
+
+and the `checked` branch now reads
+
+```python
+strong = hit.sound >= above_chance_sound(size)
+```
+
+instead of `hit.sound > 0`.
+
+The floor is **one** rather than the untested branch's four, because that is
+what the structural test buys: it cuts the chance rate by orders of magnitude
+but does not abolish it, and on a multi-gigabyte medium a few kilobytes of
+arbitrary data will oblige a plausibility check. The 8× multiplier is the one
+the untested branch already used, so the two branches now differ only in their
+floor.
+
+What that does to the media this document has numbers for:
+
+| Medium | Bytes | Old bar | New bar |
+|---|---:|---:|---:|
+| *Luminaria*, Android package | 101,922,396 | any hit | **1** |
+| *Luminaria*, expanded | 299,304,225 | any hit | **1** |
+| *Crestoria*, Android package | 118,542,014 | any hit | **1** |
+| *Tales of Graces*, Wii partition | 4,699,979,776 | any hit | 8.75 |
+| ***Tales of Xillia*, PS3 disc** | **6,949,961,728** | **any hit** | **12.95** |
+
+The last row is the one §15 is about. `ASF scene` scored 2 sound and
+`AIF image LE` scored 2, and both are now below 12.95, so the four hits that
+produced a positive verdict on four Bink movies no longer produce one.
+
+**This has not been re-run against the images it changes.** The session that
+made the fix had neither the *Xillia* disc nor any tri-Ace image; the table
+above is arithmetic. Someone with those files should run `aska.py identify`
+over *Infinite Undiscovery*, *Star Ocean 4* and *Anamnesis* before the fix is
+treated as settled, because a bar that is too high on a large medium would
+turn a real positive into a negative and that failure would be silent.
+
+### The specimen
+
+*Tales of Luminaria* (Bandai Namco, Android, 2021–2022) is the second *Tales*
+gacha, fourteen months after *Tales of Crestoria*, and it is the twelfth
+specimen here. It is a clean negative and an unusually strong one.
+
+Run over the package and over its expanded contents, `aska.py` returns an
+**empty table both times** — not one versioned magic, not one payload magic,
+not one namespace, not one pipeline string. There is not even a chance hit to
+discuss, which is a different thing from a short table.
+
+**On a medium this size the denominators run the other way**, and that is what
+makes the zero worth quoting. A four-byte magic is expected **0.0237** times
+over 299,304,225 bytes, against once or twice on the four- and seven-gigabyte
+discs where this question is usually asked. So the inversion §15 had to reason
+around is absent here: **a single hit would have counted, and there were
+none.**
+
+Checked individually, with the chance rate beside each:
+
+| | hits | by chance |
+|---|---:|---:|
+| `aska0000`, `AskaActivity`, `jb.Aska` | 0 | 0.0000 |
+| `libEpic`, `EpicActivity`, `tales-of-epic` | 0 | 0.0000 |
+| `tri-Ace`, `triAce`, `tri_Ace` | 0 | 0.0000 |
+| `Anamnesis`, `InfiniteUndiscovery`, `StarOcean` | 0 | 0.0000 |
+| `AHA3`, `MRON`, `AAC `, `AIF\0`, `SLZ\0` | 0 | 0.0237 |
+| `ISF\0` | **1** | 0.0237 |
+| AI node field magic `0x0131F119`, both byte orders | 0 | 0.0237 |
+
+The single `ISF\0` was located rather than left as a number: offset 2,136,299
+inside `lib/armeabi-v7a/libunity.so`, in the middle of THUMB code.
+
+What it runs on instead is **Unity 2019.4.16f1** with the IL2CPP backend, built
+by **COLOPL** under the project name `natalie` — read out of Unity's
+`PlayerSettings.companyName` and `productName` rather than out of a string
+search. Every reader in the *Crestoria* pipeline was pointed at it and every
+one returns zero: 0 `SLZ` files, 0 `ISF` members, 0 `AIF` textures, 0
+MessagePack documents, 0 Ogg pages, no `AHA3` cache, and no image `askadisc.py`
+recognises as formatted.
+
+### What the two Android specimens say together
+
+*Star Ocean: Anamnesis* (2016) and *Tales of Crestoria* (2020) are both ASKA on
+Android and both name it overwhelmingly — 46,507 mangled `Aska` symbols in the
+first, the `jb.Aska.AskaActivity` entry point and `aska0000.bin` in the second.
+*Tales of Luminaria* (2021) is on the same platform, in the same genre, from the
+same publisher as *Crestoria*, fourteen months later, and names nothing.
+
+The two *Tales* gacha share **46 files, all of them Google Play Services
+boilerplate**, and **2 internal names out of 6,994 against 1,333**: `MainScene`
+and `Node`. So the engine on mobile is a per-project decision made outside the
+series, and this specimen's value to this document is that it is the first one
+where the *absence* is measured against a same-platform, same-publisher,
+same-genre positive fourteen months old.
+
