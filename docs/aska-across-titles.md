@@ -1098,3 +1098,58 @@ shared vocabulary put the two formats in the same lineage; they do not make the
 2003 chunks readable with the 2008 readers, and nothing here has been tried
 against `asf.py`. That is the next measurement, and it is now cheap.
 
+---
+
+## 15. The verdict rule was fixed in one branch and not the other
+
+**Reported from outside**, by
+[ps3-talesofxillia-doc](https://github.com/vs-sr-dev/ps3-talesofxillia-doc),
+which ran `aska.py identify` over a 6,949,961,728-byte PlayStation 3 disc —
+the largest specimen this tool has been pointed at.
+
+Session 16's fix is in and it works: the tool prints the bar it used, and on
+that image `above_chance(size)` is **12**, so the untested signatures scoring
+3 and 1 are correctly ignored.
+
+**It printed "probably ASKA" anyway.** The rule is
+
+```
+if hit.checked:
+    strong = hit.sound > 0          # <- no chance term at all
+else:
+    strong = hit.count >= above_chance(size)
+```
+
+and the size term went into the branch that needed it *less*. A signature with
+a structural test is judged on `sound > 0`, and on seven gigabytes of
+compressed video that is not a bar. Two signatures cleared it with **two sound
+hits each** — `ASF scene`, 2 sound of 3, and `AIF image LE`, 2 of 5 —
+and the verdict came out positive on four hits.
+
+That repository located and read all four, which is what settles it:
+
+| signature | offset | where it lands |
+|---|---|---|
+| `ASF scene` | `0xDFCC3EE6` | inside a Bink movie, +279,502,566 |
+| `ASF scene` | `0xEB965994` | inside a Bink movie, +167,725,460 |
+| `AIF image LE` | `0x55177F00` | inside the game's LZMA container payload |
+| `AIF image LE` | `0xFF0F26BA` | inside a Bink movie, +321,425,082 |
+
+Three of four are in 4.25 GB of high-entropy Bink frames and the fourth is in
+an LZMA payload. The disc is not tri-Ace's by any other measure either: it was
+compiled with RTTI **on** and carries 276 distinct mangled class names, 161 in
+a `TO11` namespace and 80 in `TL`, and **not one** is `Aska`.
+
+**What the fix should be.** A structural test reduces the chance rate; it does
+not zero it. The `checked` branch needs the same treatment as the other one —
+judge `sound` against a bar derived from the medium size and from how much the
+test actually filters — and until it does, a positive verdict resting on a
+`checked` signature with a low `sound` count has to be read by hand. The
+general form is the one this document has now recorded three times: *the
+Resonance of Fate mistake was dismissing a real finding as noise, session 16's
+was reporting noise as a finding, and this one is fixing half of the second.*
+
+**And the specimen itself is a clean negative**, which makes it the eleventh:
+*Tales of Xillia* (PlayStation 3, 2011, Namco Tales Studio) runs the studio's
+own `TL` engine, compresses with an LZMA wrapper of its own called `TLZC`, and
+has nothing of tri-Ace's on it.
