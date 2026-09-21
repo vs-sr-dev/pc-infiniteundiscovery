@@ -182,7 +182,9 @@ stored vertices are not in.
     99.5 % of 2 560 words and the bottom half is per-title and per-disc. So it
     is a record of 64 (key, value) pairs and the keys belong to the engine, not
     to the game. What the keys select is open, as are the four columns whose
-    top halves vary down the rows — identically in both games.
+    top halves vary down the rows — identically in both games. The differential
+    reading that produced this is rung 4 of
+    [the shader plan](#the-shaders--a-plan-of-attack).
 
 14. **The ASF/WMV video runs** in the container gaps — they need splitting into
     individual movies.
@@ -212,7 +214,9 @@ stored vertices are not in.
     in disc 1's `ud1.bin` and 70 sit in the header block, so the rest are
     presumably inside archives. Related: a shader blob's constant table has a
     structure, and parsing it rather than scanning for strings would give each
-    shader its full signature.
+    shader its full signature. Both halves are rungs on
+    [the shader plan](#the-shaders--a-plan-of-attack) below, which sets out the
+    order and the check that settles each one.
 
 20. **The ASF vertex leftovers**, small after session 6: the descriptor nibble
     in slot 3 that two meshes set, and the 24 meshes whose stride is rounded up
@@ -221,6 +225,100 @@ stored vertices are not in.
     material's texture, the plain reading gives a median texel anisotropy of
     1.89 against 5.03 rotated, over 251 914 triangles. Only an actual render
     would close it.
+
+## The shaders — a plan of attack
+
+Session 7 found the shader library and §5 of
+[docs/aska-engine.md](docs/aska-engine.md) reads a great deal off it: 160
+compiled shaders in disc 1's `ud1.bin`, 114 pixel and 46 vertex, all Shader
+Model 3.0; ten different SDK compilers across them; 70 of them located exactly;
+and enough constant names to describe the renderer — Reinhard tone mapping,
+Poisson depth of field, water integrated on the GPU and written back through
+memexport, Blinn materials.
+
+**All of that is reflection metadata.** Every one of those readings is a
+string, recovered by scanning. Not one instruction of Xenos microcode has been
+decoded, so what the renderer *computes* is still unread. Questions 4, 13 and
+19 are each a piece of this; what follows is the order to take them in and the
+check that settles each one.
+
+The asymmetry to keep in mind throughout: these blobs have **no magic**. A
+compiled shader is a stream of 32-bit words, so nothing here can be settled by
+a blind search the way `SLZ` and `AIF ` were. Every rung below is either a
+published layout applied to the data, or the executable used as an oracle.
+
+**Rung 0 — a tool where there is currently a heredoc.** §5's "Reproducing"
+block is an inline snippet; there is no `tools/shader.py`. Locating the
+library, walking the blobs and emitting one record per shader is mechanical and
+unlocks every rung after it. No finding, just the apparatus.
+
+**Rung 1 — parse the constant table as a structure** (question 19's second
+half). The hypothesis worth testing first is that these blobs reuse Direct3D
+9's `CTAB` layout, which is publicly documented: a header giving the creator
+string, the version, the constant count and the offset of the constant
+records. If so it parses outright rather than being scanned.
+
+Four checks settle it, and the last is free: every name offset must land inside
+the blob; the count must match the strings §5 already scanned; register indices
+must sit inside Shader Model 3.0's limits; and **the creator string must equal
+the compiler version stamp already tabulated in §5**. That last one is an
+independent reading of data we already hold, which is exactly the kind of check
+session 16 showed to be worth more than another length test.
+
+If the offsets do not land, the layout is not `CTAB` and that is a finding in
+itself — a day spent, and the next rung is unaffected.
+
+**Rung 2 — the other 90** (question 19's first half). With a structural
+signature from rung 1, rather than the bare string `ps_3_0`, the archives can
+be swept with [tools/mron.py](tools/mron.py), which already decompresses on the
+way out.
+
+State the hypothesis before sweeping. Question 4 names "the shader program
+block between a material's header and its binding table" inside an ASF `mats`.
+**If that block is a compiled shader, the missing shaders are per-material**,
+which would explain why no resource tag holds them. That prediction has a
+number attached: the count of such blocks across `ud1.bin` should approach the
+shortfall.
+
+And if they are nowhere — not in the archives, not in the materials — the
+conclusion is **not** that they do not exist. 160 is a count of occurrences of
+a string, and counts of strings overestimate. A null here sends the work back
+to auditing that number, and that should be agreed now rather than argued
+afterwards.
+
+**Rung 3 — disassemble the microcode.** The capability that does not yet exist
+anywhere in this repository. The R500/Xenos instruction encoding is described
+publicly and implemented in open source, so this is a reader written from a
+published algorithm — which is what [tools/lzx.py](tools/lzx.py) already is.
+
+Before writing any of it, run session 17's move. §5 established that the retail
+executable carries **Microsoft's entire Xenon microcode compiler**, R500
+assembler included, with its diagnostics intact. So the first and cheapest
+question is whether the *opcode mnemonic table* shipped with it. Point
+[tools/disasm.py](tools/disasm.py) at the decrypted image and look. If it is
+there, the vendor's own opcode-to-name mapping is free and nothing has to be
+inferred; if it is not, that is settled in an afternoon and the published
+description is the fallback.
+
+A disassembly is right when every instruction decodes, when the control flow
+terminates, and — the check that actually binds — **when the registers it reads
+are the ones rung 1's constant table declares**. Two independent readings that
+have to agree is the structural test past the first match; the first two
+conditions alone are the kind of evidence that passed in session 16 and was
+still wrong.
+
+**Rung 4 — Star Ocean 4 as the second specimen.** Not as a richer sibling:
+Infinite Undiscovery carries 1 740 RTTI names and names `Aska::` just as Star
+Ocean 4 does. The value is **differential**, and it has already been collected
+once — question 13 read the shape of the 30 KB table out of the comparison
+between the two games. Same engine, one year and several SDK generations later:
+if the blob layout holds, it generalises; if it moves, the move is dated.
+
+**Rung 5 — AHSL.** The most speculative, and worth bounding before starting.
+`AHSLv2DiskCache` implies a versioned format, but a development-kit cache is
+not a retail disc artifact, and "not present on the shipped media" is a
+legitimate and cheap answer. What AHSL expands to remains a guess either way;
+§5 says so and that should not quietly harden.
 
 ## Beyond this game — answered, and what it left open
 
