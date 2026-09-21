@@ -314,11 +314,37 @@ once — question 13 read the shape of the 30 KB table out of the comparison
 between the two games. Same engine, one year and several SDK generations later:
 if the blob layout holds, it generalises; if it moves, the move is dated.
 
-**Rung 5 — AHSL.** The most speculative, and worth bounding before starting.
-`AHSLv2DiskCache` implies a versioned format, but a development-kit cache is
-not a retail disc artifact, and "not present on the shipped media" is a
-legitimate and cheap answer. What AHSL expands to remains a guess either way;
-§5 says so and that should not quietly harden.
+**Rung 5 — AHSL, and this repository's own evidence against the first version
+of this rung.** It was written here as the speculative tail, on the reasoning
+that a development-kit cache is not a retail artifact and that "not present on
+the shipped media" would be the cheap answer. **That is already falsified by
+work in this repository.** AHSL caches ship:
+
+* [docs/formats/pkg.md](docs/formats/pkg.md) records
+  `USRDIR/shader/AHSLDiskCachePs3_*` on Star Ocean 5's PlayStation 3 package
+  — **30 files, 84 MB**, on retail media;
+* Resonance of Fate's executable names `AHSLDiskCacheXe`, so the Xbox 360
+  variant exists under a name of its own;
+* Anamnesis's `libSOA.so` carries 147 `AHSL` hits.
+
+And a sibling pipeline has already opened one. `android-talesofcrestoria-doc`
+reports the `AHA3` compiled-shader cache as **archive solved, cache header
+solved, payload not** — which is the same frontier this ladder is about,
+reached from the other side.
+
+The caveat that decides how much that transfers: **Crestoria is Android**, so
+its payload is not Xenos microcode and a disassembler written for rung 3 will
+not open it. What transfers is the **container** — how a cache frames its
+entries — not the instruction stream inside them.
+
+So the cheap probe is not "is AHSL real" but **does Infinite Undiscovery's own
+data carry an `AHA3` cache**. `aska.py` already holds `AHA3` as a signature, so
+that question is one run away, and §5's `e:\AHSLCacheUD4\` paths are a reason
+to expect the answer on the dev kit rather than the disc. A null is worth
+having either way, because it would separate the two.
+
+What AHSL expands to remains a guess; §5 says so and that should not quietly
+harden.
 
 ## Beyond this game — answered, and what it left open
 

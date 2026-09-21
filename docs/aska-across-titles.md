@@ -69,7 +69,7 @@ means the tools in this repository actually parsed the title's own data.
 | Star Ocean: Anamnesis, Android 2016 | **46 507 mangled `Aska`** | `aska0000.bin`, `AHSL`, reversed AIF | one texture header | the namespace, overwhelmingly |
 | *Eternal Sonata*, X360 2007 — tri-Crescendo | no, and no RTTI | **the method byte and the magic style** — the codec turned out to be two public routines, not tri-Ace's | `vmtoc.py`, all four methods | the whole index decoding exactly |
 | *Tales of Xillia*, PS3 2011 — Namco Tales Studio ‡ | no | none — its own `TL` engine, and `TLZC` over LZMA | no | 276 mangled class names, 161 `TO11` and 80 `TL`, and **not one** `Aska` |
-| *Tales of Crestoria*, Android 2020 — Bandai Namco ‡ | **`jb.Aska.AskaActivity`**, the entry point | `aska0000.bin` | yes, by readers written in its own pipeline | the entry point and the asset name |
+| *Tales of Crestoria*, Android 2020 — Bandai Namco ‡ | **`jb.Aska.AskaActivity`**, and `Aska` in the native library | `aska0000.bin`, `disc1/fNNNNN.bin`, `SLZ`, `ISF`, `AIF`, `AHA3` | **yes** — 164/164 `SLZ`, 2 226/2 226 `ISF`, 1 600 MessagePack, 2 729/2 729 Ogg | the entry point, then the readers |
 | *Tales of Luminaria*, Android 2021 — COLOPL ‡ | no | **none — not one signature in any encoding** | no, there is nothing to open | **nothing at all: an empty table over 299,304,225 bytes** |
 
 ‡ The three *Tales* rows are **reported from outside**, by the sibling
@@ -77,10 +77,11 @@ repositories named in [§15](#15-the-verdict-rule-was-fixed-in-one-branch-and-no
 and [§16](#16-the-verdict-rule-is-fixed-and-the-twelfth-specimen-is-the-one-that-shows-why),
 and they are **not among the twelve**. The twelve are tri-Ace titles and these
 are not; what they test is the separate question of whether ASKA appears
-outside the studio, and *Crestoria* answers it yes. *Crestoria* itself was
-never measured in this repository — it is cited here from the comparison in
-[§16](#16-the-verdict-rule-is-fixed-and-the-twelfth-specimen-is-the-one-that-shows-why),
-which is also why its row is thinner than the rest.
+outside the studio, and *Crestoria* answers it yes — measured in
+[android-talesofcrestoria-doc](https://github.com/vs-sr-dev/android-talesofcrestoria-doc),
+whose counts its row quotes. Unlike the other two it has no section of its
+own here; what this document says about it is the comparison in
+[§16](#16-the-verdict-rule-is-fixed-and-the-twelfth-specimen-is-the-one-that-shows-why).
 
 **Two different things are called a specimen in this document, and the counts
 do not line up.** §1 counts tri-Ace titles tested, and there are twelve.
