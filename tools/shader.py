@@ -133,6 +133,7 @@ Usage
     python tools/shader.py list    <disc.iso | ud1.bin> --cache 0
     python tools/shader.py dis     <disc.iso | ud1.bin> --lib 5
     python tools/shader.py dis     <disc.iso | ud1.bin> --cache 1 --record 0x2010
+    python tools/shader.py compare <disc.iso> <other.iso>
     python tools/shader.py optable extract/disc1/default.exe
 """
 
@@ -388,19 +389,44 @@ class Cache:
         return body, body[at:]
 
 
-def read_library(src):
-    """The fixed library at ud1.bin +0xC000, or [] where there is none."""
-    if src.whole_image:
+def find_library(src, caches=None):
+    """Where the fixed library's index is, or None.
+
+    In this game it is at ud1.bin +0xC000. In Star Ocean 4 it is at
+    soz0.bin +0x58800, and the arrangement is the same: a small cache first,
+    the library on a sector boundary after it. So the search is the known
+    offset, then every sector in the megabyte after each cache, and a header
+    counts only if it is 0x0C, a sane count, two zero words, and a first
+    entry that points at an XDK magic.
+    """
+    candidates = [] if src.whole_image else [LIBRARY_OFFSET]
+    for c in caches if caches is not None else src.find_caches():
+        base = c.offset if isinstance(c, Cache) else c
+        candidates += range(base, base + 0x100000, SECTOR)
+    for at in candidates:
+        head = src.read(at, 0x14)
+        if len(head) < 0x14:
+            continue
+        first, count = struct.unpack(">II", head[:8])
+        if first != 0x0C or not 0 < count < 0x1000 or head[8:16] != bytes(8):
+            continue
+        e = struct.unpack(">I", head[16:20])[0]
+        if src.read(at + (e & 0x7FFFFFFF), 3) == b"\x10\x2A\x11":
+            return at
+    return None
+
+
+def read_library(src, caches=None):
+    """The fixed library as (offset, blob) pairs, or [] where there is none."""
+    base = find_library(src, caches)
+    if base is None:
         return []
-    head = src.read(LIBRARY_OFFSET, 0x10)
-    first, count = struct.unpack(">II", head[:8])
-    if first != 0x0C or not 0 < count < 0x1000 or head[8:16] != bytes(8):
-        return []
-    table = src.read(LIBRARY_OFFSET + 0x10, 4 * count)
+    count = struct.unpack(">I", src.read(base + 4, 4))[0]
+    table = src.read(base + 0x10, 4 * count)
     blobs = []
     for i in range(count):
         e = struct.unpack(">I", table[4 * i:4 * i + 4])[0]
-        at = LIBRARY_OFFSET + (e & 0x7FFFFFFF)
+        at = base + (e & 0x7FFFFFFF)
         magic, vsize, psize = struct.unpack(">III", src.read(at, 12))
         blob = src.read(at, vsize + psize)
         if (magic == 0x102A1100) != bool(e & 0x80000000):
@@ -710,11 +736,12 @@ def open_all(args):
 
 def cmd_scan(args):
     src, caches = open_all(args)
-    lib = read_library(src)
+    lib = read_library(src, caches)
     where = "image" if src.whole_image else "ud1.bin"
     if lib:
-        print("fixed library at ud1.bin +0x%X: %d shaders, %d pixel, %d vertex" % (
-            LIBRARY_OFFSET, len(lib), sum(Blob(b).kind == "ps" for _, b in lib),
+        print("fixed library at %s +0x%X: %d shaders, %d pixel, %d vertex" % (
+            where, find_library(src, caches), len(lib),
+            sum(Blob(b).kind == "ps" for _, b in lib),
             sum(Blob(b).kind == "vs" for _, b in lib)))
     else:
         print("no fixed library")
@@ -755,7 +782,8 @@ def cmd_verify(args):
                 if kind == "alu":
                     ops[d["vop"]] += 1
 
-    for at, blob in read_library(src):
+    for at, blob in read_library(src, caches):
+        tally["library blobs"] += 1
         check("library +0x%X" % at, blob)
     for i, c in enumerate(caches):
         tally["caches at version 0x%04X.%04X" % c.version] += 1
@@ -876,6 +904,47 @@ def cmd_optable(args):
         print("0x%06X  %3d  op %3d  class 0x%02X  %-18s%s" % (p, index, op, cls, name, mark))
 
 
+def collect(path):
+    """Everything comparable about one title's shaders."""
+    src = Source(path)
+    caches = [Cache.read(src, off) for off in src.find_caches()]
+    cached, keys = {}, set()
+    for c in caches:
+        for r in c.records:
+            keys.add(bytes(r.key))
+            if not r.is_alias:
+                x = c.decode(r)[1]
+                cached[hashlib.sha1(x).digest()] = Blob(x)
+    library = {hashlib.sha1(x).digest(): Blob(x) for _, x in read_library(src, caches)}
+    dictionary = caches[0].dictionary if caches else b""
+    return cached, keys, library, dictionary
+
+
+def cmd_compare(args):
+    a, b = collect(args.a), collect(args.b)
+
+    def row(label, sa, sb):
+        print("%-40s %7d %7d %7d" % (label, len(sa), len(sb), len(sa & sb)))
+
+    print("%-40s %7s %7s %7s" % ("", "first", "second", "shared"))
+    print("dictionary identical: %s" % (a[3] == b[3] and bool(a[3])))
+    row("cached programs, whole blob", set(a[0]), set(b[0]))
+    row("cached programs, microcode only", {x.code for x in a[0].values()},
+        {x.code for x in b[0].values()})
+    row("cached programs, constant signature", {(x.kind, tuple(x.constants)) for x in a[0].values()},
+        {(x.kind, tuple(x.constants)) for x in b[0].values()})
+    row("record keys", a[1], b[1])
+    row("constant names, cached programs", {n for x in a[0].values() for n, *_ in x.constants},
+        {n for x in b[0].values() for n, *_ in x.constants})
+    row("fixed library, whole blob", set(a[2]), set(b[2]))
+    row("fixed library, microcode only", {x.code for x in a[2].values()},
+        {x.code for x in b[2].values()})
+    only = collections.Counter(x.creator for h, x in b[2].items() if h not in a[2])
+    if only:
+        print("second library's own entries, by compiler: %s" % ", ".join(
+            "%s x%d" % kv for kv in sorted(only.items())))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0].strip(),
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -892,6 +961,10 @@ def main(argv=None):
         if name == "dis":
             s.add_argument("--record", type=lambda v: int(v, 0), help="record offset in the cache")
             s.add_argument("--lib", type=int, help="fixed-library entry")
+    s = sub.add_parser("compare", help="what two titles' shaders have in common")
+    s.add_argument("a", help="first disc image or ud1.bin")
+    s.add_argument("b", help="second disc image")
+    s.set_defaults(fn=cmd_compare)
     s = sub.add_parser("optable", help="print the XDK compiler's opcode table")
     s.add_argument("exe", help="the decrypted executable, as xex.py extract writes it")
     s.set_defaults(fn=cmd_optable)

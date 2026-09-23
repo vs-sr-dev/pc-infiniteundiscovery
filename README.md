@@ -64,7 +64,7 @@ docs/sessions/ chronological work log
 | `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for twenty-five engine signatures in one pass, in either byte order — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, which it has now done — see the cross-title document — and honest about the fact that a negative result proves very little. |
 | `tools/pkg.py` | Read a PlayStation 3 `.pkg` package: header, metadata, item table and extraction, through the AES-128-CTR run the whole thing sits behind. Written because Star Ocean 5's PS3 build was never pressed on a disc, so there was no filesystem to walk. |
 | `tools/node.py` | Read the NODE payload, the ASKA AI node field: the navigation-mesh polygons and what they connect to, the portal links with their precomputed route costs, the spatial partitions, an OBJ export of a map's walkable floor, and a corpus check. |
-| `tools/shader.py` | Every compiled shader on the disc: the fixed library, and the AHSL disk caches, decompressed with tri-Ace's own halfword LZ77 against their preset dictionary. Parses Microsoft's XDK shader container and its Direct3D 9 constant table, and **disassembles the Xenos microcode** using the opcode names of the XDK compiler the executable carries, which it can also print. `verify` checks every program against its own constant table. Opens Star Ocean 4's caches too. |
+| `tools/shader.py` | Every compiled shader on the disc: the fixed library, and the AHSL disk caches, decompressed with tri-Ace's own halfword LZ77 against their preset dictionary. Parses Microsoft's XDK shader container and its Direct3D 9 constant table, and **disassembles the Xenos microcode** using the opcode names of the XDK compiler the executable carries, which it can also print. `verify` checks every program against its own constant table. Opens Star Ocean 4's too, and `compare` measures what two titles share. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
@@ -167,7 +167,8 @@ Container offsets for the European release are tabulated in
   unchanged a year later. Solved: all **20 517** distinct programs decode,
   parse and disassemble, and every one reads only the registers its own
   constant table declares. The water is a vertex shader that draws nothing and
-  writes through memexport; the tone mapper is extended Reinhard.
+  writes through memexport; the tone mapper is extended Reinhard. And 56 of
+  the 60 library shaders are in Star Ocean 4 byte for byte.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that

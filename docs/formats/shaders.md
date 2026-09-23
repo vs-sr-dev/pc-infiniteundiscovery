@@ -364,9 +364,10 @@ image, and finds two sector-aligned caches:
 | dictionary | CRC `0xC2E6` | **the same 8 KB, byte for byte** |
 | records | 96 853 | 19 239 |
 | shader records / aliases | 63 351 / 33 502 | 13 164 / 6 075 |
-| distinct blobs | 20 517 | 11 679 — 11 262 pixel, 417 vertex |
+| distinct cached blobs | 20 457 | 11 679 |
+| fixed library | 60, at `ud1.bin +0xC000` | 70, at `soz0.bin +0x58800` |
 | compiler | `2.0.6534.1` in the caches | `2.0.7645.0` |
-| pass all three checks | 20 517 | **11 679** |
+| pass all three checks | 20 517 | **11 749**, library included |
 
 So the layout generalises, and what moved is dated: the version the loader
 checks went from 46.3 to 51.0 in a year, the compiler moved on by several XDK
@@ -384,10 +385,60 @@ reader had to learn:
   bit 0, with bit 4 also set. Otherwise the container is unchanged. What bit 4
   means is not known.
 
+### What was carried over, and what was rewritten
+
+Same format is one claim; the same *shaders* is a stronger one, and
+`shader.py compare` measures it:
+
+| | Infinite Undiscovery | Star Ocean 4 | shared |
+| --- | ---: | ---: | ---: |
+| dictionary | | | **identical** |
+| fixed library, whole blobs | 60 | 70 | **56** |
+| cached programs, whole blobs | 20 457 | 11 679 | 0 |
+| cached programs, microcode only | 19 450 | 11 235 | **144** |
+| cached programs, constant signature | 6 536 | 4 434 | 565 |
+| constant names in cached programs | 124 | 156 | **115** |
+| record keys | 34 393 | 18 892 | 3 |
+
+**The fixed library was copied, not rebuilt.** Star Ocean 4's sits where this
+game's does — `soz0.bin +0x58800`, after a small cache at `+0xF000`, where
+this game has `ud1.bin +0xC000` after `+0x7800` — and **56 of this game's 60
+blobs are in it byte for byte**, compiler stamps from `2.0.4025.0` to
+`2.0.6534.0` included, the water simulation among them. Its 14 entries of its
+own are dated by their stamps: one `2.0.6534.1`, two `2.0.6995.0`, eleven
+`2.0.7645.0`. So the library was frozen at `6534.0` for this game and
+extended after it.
+
+**The four that did not travel are a motion blur.** This game's library
+entries 51 to 54, built on `cmSV0V1`, `cvScreen` and `cvScreenw`, are absent,
+and entry 51 reads as a camera motion blur by reprojection: it fetches colour
+and depth, rebuilds each pixel's position from them, carries it through the
+4×4 `cmSV0V1` to where it was a frame earlier, and — predicated on the
+displacement exceeding a threshold — averages five taps along the vector.
+Star Ocean 4 has instead a family of eleven built around **`cvVel`**, one of
+them still taking `cmSV0V1`. Velocity by name; that it is a rewrite of the
+same effect is a reading of the names, and its code is not read yet.
+
+**The cached programs are the same material recompiled.** No whole blob can
+match — the creator string differs — but **144 programs are identical
+instruction for instruction** across `2.0.6534.1` and `2.0.7645.0`, and they
+are not trivial ones: most run past 100 slots, and the largest are the
+vertex-texture skinning shaders, `asVertexSampler` and
+`cvTexturePaletteSize`, at 150 to 172. 115 of this game's 124 constant names
+recur. What Star Ocean 4 adds is vocabulary this game does not have —
+`ePARALLAXOCCLUSION_SHADOW`, more projector cascades, `eSoftScale`, and
+`cvExportAddrLighting`, memexport put to a second use.
+
+**The keys changed.** Three keys of tens of thousands coincide. The
+permutation encoding moved between the two cache versions, which is at least
+a reason for the version to have moved.
+
 ## 10. Implementation
 
 [tools/shader.py](../../tools/shader.py): `scan` locates the library and the
 caches, `verify` makes every check above, `list` prints one line per shader
-with its constants, `dis` disassembles one, and `optable` prints the
-compiler's table out of the decrypted executable. It takes a disc image or
-`ud1.bin` on its own.
+with its constants, `dis` disassembles one, `compare` measures what two
+titles share, and `optable` prints the compiler's table out of the decrypted
+executable. It takes a disc image or `ud1.bin` on its own; on an image without
+`ud1.bin` it searches the whole image, and looks for a fixed library in the
+megabyte after each cache.

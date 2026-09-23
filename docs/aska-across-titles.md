@@ -1312,6 +1312,22 @@ That places two things on the timeline this document has been building:
   46.3 to 51.0 — which is what an asset belonging to the engine rather than to
   either title looks like.
 
+And the shaders themselves travelled, which is a stronger claim than the
+format. **56 of Infinite Undiscovery's 60 fixed-library shaders are in Star
+Ocean 4's library byte for byte**, old compiler stamps and all, at the same
+place in the head of the first container; its 14 additions carry newer stamps.
+The four that did not travel are a camera motion blur, replaced by a family
+built on `cvVel`. In the caches, 144 programs of 100 slots and more are
+identical instruction for instruction across two compilers, and 115 of 124
+constant names recur. The record keys are what changed — three coincide in
+tens of thousands — which is the permutation encoding moving with the cache
+version. So the online description of this game as a test drive of Star
+Ocean 4's engine is, on the renderer's evidence, fair about the *material*:
+the second game shipped the first one's post-processing unchanged. What the
+discs cannot show is the intent — that is a claim about the order of
+planning, and they record only the order of shipping. See
+[formats/shaders.md §9](formats/shaders.md#9-star-ocean-4-the-second-specimen).
+
 Resonance of Fate, whose executable names `AHSLDiskCacheXe`, shows no
 sector-aligned `AHSX` on its disc. That is the expected null rather than a
 negative: its containers are entropy 8.00 throughout (question 23), so a cache

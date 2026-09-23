@@ -8,7 +8,9 @@ Solved work lives in [docs/formats/](docs/formats/) and is not repeated here.
 The numbered questions are all about this one disc; the section at the end,
 [Beyond this game](#beyond-this-game--is-aska-in-other-titles), is not.
 
-**Start here next time: question 1.** After session 12 a scene is readable as
+**Start here next time: [the plan for session 20](#next-session--session-20)**
+— the shaders' last open thread first, then question 1. After session 12 a
+scene is readable as
 *structure* from every side — geometry, materials, textures, skeleton,
 animation, collision, the script that drives it and the navigation mesh the AI
 walks on — and every skinned object indexes its own file's node tree, so there
@@ -106,13 +108,65 @@ executable carries, and **every one of the 20 517 programs passes a check that
 ties its instructions to its constant table**. The specification is
 [docs/formats/shaders.md](docs/formats/shaders.md).
 
-**Start here next time, if the shaders are the thread: question 4.** Every
-shader record carries a key — presumably the permutation that built it — and
-every ASF material carries an unread "shader program block". If one is the
-other, each mesh on the disc can be tied to the compiled programs that draw
-it, and the fragment names of [aska-engine.md §5](docs/aska-engine.md) to the
-key's bits. That is one comparison away. Otherwise question 1 remains the main
-line.
+It then asked the question the user put to it — is Star Ocean 4 built on this
+game's material, not just its formats? — and the renderer answers yes: **56 of
+the 60 library shaders are in Star Ocean 4 byte for byte**, old compiler
+stamps and all; the four that are not are a reprojection motion blur, replaced
+there by a `cvVel` family; and 144 cached programs of 100 slots and more are
+identical instruction for instruction across two compilers. What changed is
+the permutation key.
+
+## Next session — session 20
+
+Ordered by what each step unlocks against what it costs. Every step names the
+check that settles it and what each outcome would mean, stated before the
+measurement rather than after.
+
+**Step 1 — the material block against the cache keys (question 4).** Every
+ASF `mats` has its shader program block at `+0xB0`, running to the binding
+table offset at `+0x20` ([asf.md](docs/formats/asf.md#inside-a-mats)); every
+cache record has a key of up to 300 bytes
+([shaders.md §3](docs/formats/shaders.md#records)). `extract/models/` already
+holds the ASF corpus, and `shader.py` can collect all 96 853 keys in a
+minute and a half.
+
+* Compare three ways, cheapest first: the block **whole** against whole keys;
+  the block against keys **from their ninth byte**, which is where an alias
+  and its target start to agree; and the block's first eight bytes against
+  the keys' first eight and against the record hash at `+0x00`.
+* **The check that binds:** a hit is only a hit if it is consistent — a
+  material with no textures must land on a program whose constant table
+  declares no sampler, and a material with *n* float bindings on one that
+  declares at least that many float constants. One program per material,
+  agreeing with both, on hundreds of materials, is a finding; a handful of
+  matches with no such agreement is chance at this corpus size.
+* **If it hits:** every mesh on the disc maps to the programs that draw it,
+  and the key's bits can be read against the fragment names of
+  [aska-engine.md §5](docs/aska-engine.md#the-shading-system) —
+  `MarschnerShader`, `NormalMap`, `ParallaxMappingLo` and the rest. That would
+  make the next step "decode the key", with the disassembly as the check.
+* **If it misses** in all three forms, the block is not the key, and the
+  next place to look is the other direction: what in the executable builds a
+  key — the loader passes `record + 0x0C` to `0x82217D68`, which is where to
+  start reading.
+
+**Step 2 — which cache serves what.** The nine big caches differ in size and
+in the mask at `+0x04`, and 8 909 programs appear in exactly three of them.
+Cheap measurements: key overlap between caches, and whether the constant
+vocabulary splits by cache (a cache without `ePROJECTORCASCADEMATRIX` is not
+an outdoor one). If step 1 hit, the cleaner test is which cache holds the
+programs of which area's materials.
+
+**Step 3 — two small readings, one per game.** Star Ocean 4's `cvVel` family,
+which replaced this game's reprojection motion blur, with `shader.py dis`: is
+it a per-object velocity buffer, and is it the same effect rewritten? And how
+the key encoding changed between cache versions 46.3 and 51.0 — only if
+step 1 has given the key a meaning, since before that there is nothing to
+compare.
+
+**Then the main line again: question 1**, the scene-script opcodes. And, on
+the cross-title side, question 22's last piece — Star Ocean 5's PlayStation 3
+codecs — is still the best lead there.
 
 ## Now the main line of work
 
@@ -321,6 +375,10 @@ What the ladder leaves open, smaller than what it started with:
   entropy 8.00 throughout, so a cache would be inside them.
 * **The two-operand scalar lane selection**, the one piece of the ALU the
   disassembler prints raw.
+* **Star Ocean 4's `cvVel` family**, which replaced this game's reprojection
+  motion blur — step 3 of the next-session plan.
+* **The key encoding's change** between cache versions 46.3 and 51.0: three
+  keys of tens of thousands coincide across the two games.
 
 ## Beyond this game — answered, and what it left open
 

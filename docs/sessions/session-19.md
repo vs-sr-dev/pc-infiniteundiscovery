@@ -172,6 +172,34 @@ ASF movies — 45, 158, 217, 13, 28 and 249 seconds — whose File Properties
 sizes tile to the sector, one `AIF ` texture, and the nine caches, back to back
 until the next archive. That is question 14 done for one of its runs.
 
+## 9. Afterwards: what Star Ocean 4 took, and what it rewrote
+
+The user raised the usual description of this game as a test drive of the
+engine meant for Star Ocean 4, and the question it suggests is measurable: not
+whether the two share a format, which §6 had shown, but whether they share
+**shaders**. `shader.py compare` was written for it.
+
+* **The fixed library travelled.** Star Ocean 4's is at `soz0.bin +0x58800`,
+  after a small cache at `+0xF000` — this game's arrangement at the head of
+  the first container — and **56 of this game's 60 blobs are in it byte for
+  byte**, stamps from `2.0.4025.0` to `2.0.6534.0` included. It adds 14 of its
+  own, stamped `2.0.6534.1` once, `2.0.6995.0` twice and `2.0.7645.0` eleven
+  times.
+* **The four that did not are a motion blur.** Library entries 51 to 54 are
+  built on `cmSV0V1`; entry 51 disassembles to a camera motion blur by
+  reprojection — depth to position, through the matrix to the previous frame,
+  five taps along the displacement when it passes a threshold. Star Ocean 4
+  replaces them with a family built on `cvVel`, not yet read.
+* **The cached programs are the same material recompiled.** 144 are identical
+  in microcode across two compilers, mostly over 100 slots — the skinning
+  shaders among them at up to 172 — and 115 of 124 constant names recur.
+* **The keys are not shared** — 3 in tens of thousands — so the permutation
+  encoding changed with the cache version.
+
+On the renderer's evidence the test-drive description is fair about the
+material: the later game shipped the earlier one's post-processing unchanged.
+It remains a claim about intent, which the discs do not record.
+
 ## Left open
 
 1. **What the record key encodes**, and whether it is the shader program block
@@ -182,3 +210,5 @@ until the next archive. That is question 14 done for one of its runs.
    untested candidate in `AHSLProfileData`, the constructor's other path.
 5. The lane selection of two-operand scalar ops.
 6. The rest of question 14's video runs, which the same walk will split.
+7. Star Ocean 4's `cvVel` family, and whether it is the motion blur rewritten.
+8. How the record key's encoding changed between cache versions 46.3 and 51.0.
