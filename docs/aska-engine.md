@@ -214,11 +214,21 @@ internal cast list: `Btl_AYA_Sp10Collision`, `BtlArrow_AYA_Blitz`,
 
 ## 5. Shaders
 
-Disc 1's `ud1.bin` contains exactly **160 compiled shaders** — 114 pixel and
-46 vertex, all Shader Model 3.0. They are Xenos microcode with D3D constant
-tables attached, not HLSL source: each blob carries its reflection metadata,
-then the target string `ps_3_0` or `vs_3_0`, then the compiler's version
-stamp.
+> **Session 19 read the shaders properly, and the first half of this section
+> is superseded by [formats/shaders.md](formats/shaders.md).** What follows
+> was written from string counts, and is kept with corrections marked so the
+> reasoning stays visible. The short version: `ud1.bin` holds a **fixed
+> library of 60 shaders** and **ten AHSL disk caches** of 96 853 records —
+> 20 457 distinct compiled programs — and every one of them now decodes,
+> parses and disassembles.
+
+Disc 1's `ud1.bin` was counted as containing **160 compiled shaders** — 114
+pixel and 46 vertex, all Shader Model 3.0. They are Xenos microcode with D3D
+constant tables attached, not HLSL source: each blob carries its reflection
+metadata, then the target string `ps_3_0` or `vs_3_0`, then the compiler's
+version stamp. *Correction:* 160 was the number of target strings. Sixty are
+the fixed library; the other hundred are the same ten strings inside a
+compression dictionary, once in each of ten caches, and are not shaders.
 
 Those version stamps are an archaeological record of the project:
 
@@ -239,6 +249,12 @@ Ten different SDK compilers across the shader library. A hundred shaders were
 rebuilt with the final November 2007 toolchain and sixty were carried forward
 untouched from as far back as five SDK generations earlier — the shader library
 was never rebuilt wholesale, only incrementally.
+
+*Correction, session 19:* half right. The nine older rows are **the fixed
+library, to the shader** — 1 + 5 + 11 + 4 + 2 + 5 + 2 + 29 + 1 = 60 — so the
+sixty really were carried forward. The hundred `2.0.6534.1` stamps are the
+dictionaries. What the final toolchain actually built is the contents of the
+caches: 20 457 distinct programs, every one stamped `2.0.6534.1`.
 
 Constant names follow a consistent prefix convention, visible in the constant
 tables: `cv…` for constant vectors (`cvLightContext`, `cvLightMask`,
@@ -270,6 +286,18 @@ of its `0x100`-byte blocks are still shared verbatim, it holds nothing that
 points into the shader area, and it reads as a table of 32-bit values whose
 columns repeat every `0x100` bytes. What it is remains open.
 
+*Correction, session 19:* the middle row is three things, not one. The table
+runs to `0x77FF` — 30 720 bytes, not 30 488 — and the region after it is a
+26-record `AHSX` cache at `0x7800`, zero padding, and the fixed library at
+`0xC000`, whose 60 blobs tile exactly to `0x147FF`:
+
+| Range | What |
+| --- | --- |
+| `0x00000`–`0x077FF` | the table, still unidentified |
+| `0x07800`–`0x0BCC1` | an AHSL disk cache: dictionary and 26 records |
+| `0x0C000`–`0x147FF` | the fixed library: a 60-entry index and 60 blobs |
+| `0x14800`–`0x15FFF` | zero padding |
+
 ### What the constant names say the renderer does
 
 Reading the constant tables of those 70 shaders adds a good deal to the
@@ -287,7 +315,11 @@ run together where the tables abut.
   shader — with `cvWaveParams`, `cvGridSize`, and then `cvExportAddr` and
   `cvExportNormal`. An export address is the Xbox 360's memexport, so the
   simulation writes its results and the normals it derives straight back to
-  memory for the geometry pass to read.
+  memory for the geometry pass to read. *Correction, session 19:* it is a
+  **vertex** shader, one vertex per grid cell, which samples the two height
+  fields through vertex texture fetch, exports the new height and a packed
+  normal, and draws nothing — the disassembly is read in
+  [shaders.md §8](formats/shaders.md#8-two-readings).
 * **Video**: `YTexture`, `UTexture`, `VTexture` — the YUV conversion for the
   WMV streams that occupy 3.2 GB of the four containers.
 * **Effects**: `SpriteAnimTex`, `ImageTexture`, `ParamTexture`, and
@@ -331,13 +363,10 @@ the executable names shaders of the same kind from the engine's.
 ### Reproducing
 
 ```
-python - <<'EOF'
-import re
-f = open("disc1.iso", "rb"); f.seek(1703536640)
-d = f.read(0x16000)[0x7718:0x14804]
-print(d.count(b"ps_3_0"), "pixel,", d.count(b"vs_3_0"), "vertex shaders")
-print(sorted({m.group().decode() for m in re.finditer(rb"c[vma][A-Z][A-Za-z0-9_]+", d)}))
-EOF
+python tools/shader.py scan    disc1.iso      # the library and the ten caches
+python tools/shader.py list    disc1.iso      # every library shader and its constants
+python tools/shader.py verify  disc1.iso      # decode, parse and check all of it
+python tools/shader.py dis     disc1.iso --lib 25
 ```
 
 ### AHSL
@@ -355,6 +384,13 @@ project code. A versioned disk cache plus profile data implies AHSL was
 compiled through a caching pipeline during development. What AHSL expands to
 is not stated anywhere in the binary; "Aska High-level Shading Language" is a
 guess, not a finding.
+
+*Session 19:* **the disk cache ships.** The constructor that stores the
+`AHSLv2DiskCache` path also sets the two version halfwords the `AHSX` loader
+checks, and ten `AHSX` caches sit in `ud1.bin` — 96 853 records, 116 MB, the
+same on both discs. They are compressed with tri-Ace's own halfword LZ77 from
+the PlayStation 2, against an 8 KB dictionary that Star Ocean 4 ships
+byte-identical a year later. See [formats/shaders.md](formats/shaders.md).
 
 Note that the retail executable also contains Microsoft's **entire Xenon
 microcode compiler** — the full HLSL front end, optimiser, register allocator

@@ -151,13 +151,18 @@ size fields is consistent with an LZ variant over game data.
 
 ## 7. Open questions
 
-* The first `0x16000` bytes of each `ud1.bin` precede the first archive. Session
-  7 identified most of them: `0x7718`–`0x14803` is the compiled shader library,
-  70 shaders, byte-identical on both discs, and the tail is zero padding. The
-  30 488 bytes before it are a per-disc table with a `0x100`-byte period and are
-  still not identified. See [the engine notes](../aska-engine.md).
+* The first `0x16000` bytes of each `ud1.bin` precede the first archive.
+  Session 19 read all but the first of them: an `AHSX` shader cache at
+  `0x7800` and the fixed shader library at `0xC000`, byte-identical on both
+  discs, then zero padding — see [shaders.md](shaders.md). The 30 720 bytes
+  before `0x7800` are a per-disc table with a `0x100`-byte period and are still
+  not identified.
 * `tools/mron.py` reports each contiguous non-archive run as a single gap, so
   the reported ASF sizes are runs of concatenated streams. They need splitting.
+  One is split: disc 1's `ud1.bin` run at `0x01442800`, reported as 630 MB of
+  ASF, is **six movies** that tile exactly to the sector, one `AIF ` texture,
+  and **nine `AHSX` shader caches**, 116 MB of them — see
+  [shaders.md §1](shaders.md#1-where-the-shaders-are).
 * The SLZ algorithm — solved in session 4, see [slz.md](slz.md).
 * Payload structure for every tag except the broad strokes of `MESH`.
 

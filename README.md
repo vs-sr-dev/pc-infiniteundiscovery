@@ -64,6 +64,7 @@ docs/sessions/ chronological work log
 | `tools/aska.py` | Ask whether a file belongs to the ASKA engine at all. Sweeps any image, container, executable or payload for twenty-five engine signatures in one pass, in either byte order — versioned magics, payload magics, structural constants, the artists' Maya naming, and the engine namespace in both MSVC and Itanium mangling — and weighs what it finds. Written to test tri-Ace's other titles, which it has now done — see the cross-title document — and honest about the fact that a negative result proves very little. |
 | `tools/pkg.py` | Read a PlayStation 3 `.pkg` package: header, metadata, item table and extraction, through the AES-128-CTR run the whole thing sits behind. Written because Star Ocean 5's PS3 build was never pressed on a disc, so there was no filesystem to walk. |
 | `tools/node.py` | Read the NODE payload, the ASKA AI node field: the navigation-mesh polygons and what they connect to, the portal links with their precomputed route costs, the spatial partitions, an OBJ export of a map's walkable floor, and a corpus check. |
+| `tools/shader.py` | Every compiled shader on the disc: the fixed library, and the AHSL disk caches, decompressed with tri-Ace's own halfword LZ77 against their preset dictionary. Parses Microsoft's XDK shader container and its Direct3D 9 constant table, and **disassembles the Xenos microcode** using the opcode names of the XDK compiler the executable carries, which it can also print. `verify` checks every program against its own constant table. Opens Star Ocean 4's caches too. |
 | `tools/aac.py` | Read AAC audio containers: the sound directory with the original filenames, rates, durations and loop points; export to RIFF-wrapped XMA2 or straight to PCM; walk or search a disc region for the containers the music is stored in. |
 
 ### Quick start
@@ -125,6 +126,11 @@ python tools/aac.py xma  "path/to/disc1.iso" music/ --offset 0x8E75C000 --length
 python tools/mron.py extract "path/to/disc1.iso" --offset 1703536640 --length 2207584256 --tag SOND --decompress extract/sound
 python tools/aac.py verify extract/sound/*.bin
 
+# Every shader: find them, check them all, read one
+python tools/shader.py scan   "path/to/disc1.iso"
+python tools/shader.py verify "path/to/disc1.iso"
+python tools/shader.py dis    "path/to/disc1.iso" --lib 25
+
 # Recover the executable, then read its class inventory
 python tools/xex.py  info    extract/disc1/default.xex
 python tools/xex.py  extract extract/disc1/default.xex extract/disc1/default.exe
@@ -140,7 +146,7 @@ Container offsets for the European release are tabulated in
 
 * [The ASKA engine](docs/aska-engine.md) — what the retail binary reveals about
   tri-Ace's engine: 1 740 recovered class names, the renderer, the AI and
-  battle architecture, the shader library.
+  battle architecture, the shading system.
 * [Is ASKA in tri-Ace's other titles?](docs/aska-across-titles.md) — the one
   document here that is not about this disc. Twelve titles measured against
   this baseline, from Star Ocean: The Second Story on the PlayStation in 1998
@@ -154,6 +160,14 @@ Container offsets for the European release are tabulated in
   no engine and no container, and its compression turned out on a second look
   to be two stock public routines rather than tri-Ace's — so what the people
   who left took with them is the **convention**, not the code.
+* [Shaders](docs/formats/shaders.md) — every compiled shader the game ships,
+  and a reading of the microcode inside them. A fixed library of 60 and ten
+  **AHSL disk caches** of 96 853 records, compressed with tri-Ace's own
+  PlayStation 2 codec against an 8 KB dictionary that Star Ocean 4 ships
+  unchanged a year later. Solved: all **20 517** distinct programs decode,
+  parse and disassemble, and every one reads only the registers its own
+  constant table declares. The water is a vertex shader that draws nothing and
+  writes through memexport; the tone mapper is extended Reinhard.
 * [Disc layout](docs/disc-layout.md) — how the two retail discs are physically
   organised, and where the containers sit.
 * [NORM / MRON](docs/formats/norm-mron.md) — the ASKA resource archive that
@@ -291,6 +305,15 @@ The animation cross-check confirms it from outside: 26 346 more channels came
 into the rest-pose comparison and the agreement held at 99.5 %. The same
 session identified `SKAC` — a character's overflow animation bundle, binding to
 the model archive immediately before it in 13 of 15 cases.
+
+Session 19 read the shaders, which since session 7 had been known only by the
+strings in them. They are a fixed library of 60 and ten AHSL disk caches —
+116 MB, in a run the container walk had filed as video — compressed with the
+halfword LZ77 of tri-Ace's PlayStation 2 titles against a preset dictionary.
+All 20 517 distinct programs disassemble, with the opcode names of the
+Microsoft compiler the executable carries, and every one passes a check that
+ties its instructions to its constant table. Star Ocean 4's caches open with
+the same reader and the same dictionary.
 
 What remains is mostly meaning rather than structure — 246 of the 253 scene
 script opcodes are known by number, arity and operand kinds but not by what

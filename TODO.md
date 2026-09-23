@@ -93,6 +93,27 @@ repository. Same numbering, same stored method 0, and neither studio's codecs
 decode it. Opening them would also unblock **question 21**, its payload
 envelope.
 
+Session 19 went back to this disc and took the whole
+[shader plan](#the-shaders--the-plan-and-where-it-ended) in one sitting.
+What session 7 had read as "160 shaders, 70 of them located" is **a fixed
+library of 60 and ten AHSL disk caches of 96 853 records**, 20 517 distinct
+compiled programs in all — and the "other 90" were never shaders but ten
+copies of a compression dictionary. The caches are compressed with **tri-Ace's
+PlayStation 2 halfword LZ77**, `SLZ` method 3, against that 8 KB dictionary,
+which Star Ocean 4 ships byte-identical a year later. A disassembler now reads
+the microcode, with Microsoft's own opcode names out of the compiler the
+executable carries, and **every one of the 20 517 programs passes a check that
+ties its instructions to its constant table**. The specification is
+[docs/formats/shaders.md](docs/formats/shaders.md).
+
+**Start here next time, if the shaders are the thread: question 4.** Every
+shader record carries a key — presumably the permutation that built it — and
+every ASF material carries an unread "shader program block". If one is the
+other, each mesh on the disc can be tied to the compiled programs that draw
+it, and the fragment names of [aska-engine.md §5](docs/aska-engine.md) to the
+key's bits. That is one comparison away. Otherwise question 1 remains the main
+line.
+
 ## Now the main line of work
 
 **1. What the SNC opcodes do.** This has to be answered inside this game:
@@ -129,6 +150,12 @@ separates a colour map from a normal map; the shader program block between a
 material's header and its binding table; the 48-byte records counted at
 `mats +0x19`, which look like a UV transform; and the four-byte entries in an
 `rnel`, presumably how the shading nodes connect.
+
+Session 19 gave the shader program block something to be compared with: every
+record in the AHSL caches carries a key of up to 300 bytes that is not yet read
+— [shaders.md §3](docs/formats/shaders.md#records). Test first whether a
+material's block appears among the keys, whole or after its first eight bytes,
+which is where an alias's key and its target's start to agree.
 
 **5. The AAF leftovers**, small and self-contained after session 9: the word
 at `+0x20` which is larger than the file; the three floats at `+0x14` of an
@@ -173,10 +200,13 @@ stored vertices are not in.
     older specimen in the clear is a much better position than an unread
     format with one.
 
-13. **The 30 488 bytes at the start of each `ud1.bin`.** Session 7 identified
-    the rest of that `0x16000` header as the compiled shader library, 70 of the
-    160 shaders in the container. What is left is a table with a `0x100`-byte
-    period, holding no pointers. Session 13 found its first `0x2800` bytes in
+13. **The 30 720 bytes at the start of each `ud1.bin`.** Session 7 identified
+    the rest of that `0x16000` header as the compiled shader library; session
+    19 read it as an AHSL cache at `0x7800` and the fixed library at `0xC000`,
+    which moves this table's end from `0x7718` to `0x7800`. What is left is a
+    table with a `0x100`-byte period, holding no pointers. One untested
+    candidate: the constructor that names the AHSL disk cache also names
+    `AHSLProfileData`, and nothing has been found under that name yet. Session 13 found its first `0x2800` bytes in
     **Star Ocean 4** as well and read the shape off the comparison: 40 rows of
     64 words, where the **top half of each word is the same in both games** on
     99.5 % of 2 560 words and the bottom half is per-title and per-disc. So it
@@ -184,10 +214,13 @@ stored vertices are not in.
     to the game. What the keys select is open, as are the four columns whose
     top halves vary down the rows — identically in both games. The differential
     reading that produced this is rung 4 of
-    [the shader plan](#the-shaders--a-plan-of-attack).
+    [the shader plan](#the-shaders--the-plan-and-where-it-ended).
 
 14. **The ASF/WMV video runs** in the container gaps — they need splitting into
-    individual movies.
+    individual movies. *One done:* disc 1's `ud1.bin` run at `0x01442800` is
+    six movies whose File Properties sizes tile exactly to the sector, one
+    `AIF `, and nine shader caches — 116 MB of the "630 MB of video" was never
+    video. The same header walk will split the rest.
 
 15. **`AOF`**, named three times in the engine's RTTI (`Aska::AofHandler`,
     `Aska::AofObject`, `Aska::DirectAofHandler`) but never seen as a payload
@@ -210,13 +243,12 @@ stored vertices are not in.
 18. **Five missing music tracks** — the numbers 35, 45, 46, 55 and 74 appear on
     neither disc. Cut, or somewhere not yet walked.
 
-19. **The other 90 shaders**, which session 7 did not locate: 160 are counted
-    in disc 1's `ud1.bin` and 70 sit in the header block, so the rest are
-    presumably inside archives. Related: a shader blob's constant table has a
-    structure, and parsing it rather than scanning for strings would give each
-    shader its full signature. Both halves are rungs on
-    [the shader plan](#the-shaders--a-plan-of-attack) below, which sets out the
-    order and the check that settles each one.
+19. **The other 90 shaders.** *Answered in session 19:* there were never 90
+    more. 100 of the 160 counted strings are one compression dictionary in ten
+    caches, and the shaders that exist — 60 in a fixed library, 20 457 in the
+    caches — all decode and disassemble. See
+    [the shader plan](#the-shaders--the-plan-and-where-it-ended) below and
+    [docs/formats/shaders.md](docs/formats/shaders.md).
 
 20. **The ASF vertex leftovers**, small after session 6: the descriptor nibble
     in slot 3 that two meshes set, and the 24 meshes whose stride is rounded up
@@ -226,125 +258,69 @@ stored vertices are not in.
     1.89 against 5.03 rotated, over 251 914 triangles. Only an actual render
     would close it.
 
-## The shaders — a plan of attack
+## The shaders — the plan, and where it ended
 
-Session 7 found the shader library and §5 of
-[docs/aska-engine.md](docs/aska-engine.md) reads a great deal off it: 160
-compiled shaders in disc 1's `ud1.bin`, 114 pixel and 46 vertex, all Shader
-Model 3.0; ten different SDK compilers across them; 70 of them located exactly;
-and enough constant names to describe the renderer — Reinhard tone mapping,
-Poisson depth of field, water integrated on the GPU and written back through
-memexport, Blinn materials.
+Session 7 found shader-looking data at the head of `ud1.bin`, and §5 of
+[docs/aska-engine.md](docs/aska-engine.md) read a great deal off it — all of it
+reflection metadata, strings recovered by scanning. This section was a ladder
+for turning that into a reading of what the renderer computes, with the check
+that settles each rung. **Session 19 climbed all of it**;
+[docs/formats/shaders.md](docs/formats/shaders.md) is the result. What each
+rung found, in the order the plan set, including where the plan was wrong:
 
-**All of that is reflection metadata.** Every one of those readings is a
-string, recovered by scanning. Not one instruction of Xenos microcode has been
-decoded, so what the renderer *computes* is still unread. Questions 4, 13 and
-19 are each a piece of this; what follows is the order to take them in and the
-check that settles each one.
+**Rung 0 — a tool.** [tools/shader.py](tools/shader.py): `scan`, `verify`,
+`list`, `dis`, `optable`, on a disc image or `ud1.bin`.
 
-The asymmetry to keep in mind throughout: these blobs have **no magic**. A
-compiled shader is a stream of 32-bit words, so nothing here can be settled by
-a blind search the way `SLZ` and `AIF ` were. Every rung below is either a
-published layout applied to the data, or the executable used as an oracle.
+**Rung 1 — the constant table as a structure.** It *is* Direct3D 9's `CTAB`,
+unchanged, inside Microsoft's XDK container — and the plan's fourth check was
+the one that caught the surprise. The first `CTAB` tried, at `0x784C`, has
+creator and target offsets that land and name offsets that land **0x6C to 0x9C
+bytes early**: a table with bytes missing. That was the first sign that what
+session 7 had read was not shaders at all.
 
-**Rung 0 — a tool where there is currently a heredoc.** §5's "Reproducing"
-block is an inline snippet; there is no `tools/shader.py`. Locating the
-library, walking the blobs and emitting one record per shader is mechanical and
-unlocks every rung after it. No finding, just the apparatus.
+**Rung 2 — the other 90.** The plan's own warning was the answer: "160 is a
+count of occurrences of a string, and counts of strings overestimate." 100 of
+the 160 are the ten strings of one **8 KB compression dictionary**, repeated
+at the head of ten `AHSX` caches; the other 60 are a fixed library at `0xC000`.
+The caches hold 63 351 compressed shader records and 33 502 aliases — 20 457
+distinct programs — and they sit not in the archives but in the gap filed as
+video. The per-material hypothesis was not needed to find them, and is now
+question 4's lead instead.
 
-**Rung 1 — parse the constant table as a structure** (question 19's second
-half). The hypothesis worth testing first is that these blobs reuse Direct3D
-9's `CTAB` layout, which is publicly documented: a header giving the creator
-string, the version, the constant count and the offset of the constant
-records. If so it parses outright rather than being scanned.
+**Rung 3 — the microcode.** Session 17's move worked a third time: the retail
+executable carries the XDK compiler's **opcode table**, 103 named rows, so the
+names are Microsoft's. It agrees with the public encoding everywhere except
+`MAX_V`, which the microcode settles. The check the plan called the one that
+binds — the registers the instructions read are the ones the constant table
+declares — passes on **all 20 517** distinct programs, once three
+register-file bases are applied that the metadata does not state.
 
-Four checks settle it, and the last is free: every name offset must land inside
-the blob; the count must match the strings §5 already scanned; register indices
-must sit inside Shader Model 3.0's limits; and **the creator string must equal
-the compiler version stamp already tabulated in §5**. That last one is an
-independent reading of data we already hold, which is exactly the kind of check
-session 16 showed to be worth more than another length test.
+**Rung 4 — Star Ocean 4.** Two caches on its disc, at version `0x0033.0x0000`
+against this game's `0x002E.0x0003`, compiler `2.0.7645.0`, and **the same
+dictionary byte for byte**. All 11 679 of its distinct programs pass, after
+the reader learned two things the newer compiler does. The layout generalises,
+and what moved is dated.
 
-If the offsets do not land, the layout is not `CTAB` and that is a finding in
-itself — a day spent, and the next rung is unaffected.
+**Rung 5 — AHSL.** Answered: `AHSX` is the `AHSLv2DiskCache` the development
+kit's path names, identified by the constructor that sets both, and it ships
+— 116 MB of it on this game's retail disc. And the codec inside it is the
+oldest thing tri-Ace owns: the halfword LZ77 of its PlayStation 2 titles,
+running on a PowerPC in 2008 with a preset dictionary. What AHSL expands to is
+still a guess.
 
-**Rung 2 — the other 90** (question 19's first half). With a structural
-signature from rung 1, rather than the bare string `ps_3_0`, the archives can
-be swept with [tools/mron.py](tools/mron.py), which already decompresses on the
-way out.
+What the ladder leaves open, smaller than what it started with:
 
-State the hypothesis before sweeping. Question 4 names "the shader program
-block between a material's header and its binding table" inside an ASF `mats`.
-**If that block is a compiled shader, the missing shaders are per-material**,
-which would explain why no resource tag holds them. That prediction has a
-number attached: the count of such blocks across `ud1.bin` should approach the
-shortfall.
-
-And if they are nowhere — not in the archives, not in the materials — the
-conclusion is **not** that they do not exist. 160 is a count of occurrences of
-a string, and counts of strings overestimate. A null here sends the work back
-to auditing that number, and that should be agreed now rather than argued
-afterwards.
-
-**Rung 3 — disassemble the microcode.** The capability that does not yet exist
-anywhere in this repository. The R500/Xenos instruction encoding is described
-publicly and implemented in open source, so this is a reader written from a
-published algorithm — which is what [tools/lzx.py](tools/lzx.py) already is.
-
-Before writing any of it, run session 17's move. §5 established that the retail
-executable carries **Microsoft's entire Xenon microcode compiler**, R500
-assembler included, with its diagnostics intact. So the first and cheapest
-question is whether the *opcode mnemonic table* shipped with it. Point
-[tools/disasm.py](tools/disasm.py) at the decrypted image and look. If it is
-there, the vendor's own opcode-to-name mapping is free and nothing has to be
-inferred; if it is not, that is settled in an afternoon and the published
-description is the fallback.
-
-A disassembly is right when every instruction decodes, when the control flow
-terminates, and — the check that actually binds — **when the registers it reads
-are the ones rung 1's constant table declares**. Two independent readings that
-have to agree is the structural test past the first match; the first two
-conditions alone are the kind of evidence that passed in session 16 and was
-still wrong.
-
-**Rung 4 — Star Ocean 4 as the second specimen.** Not as a richer sibling:
-Infinite Undiscovery carries 1 740 RTTI names and names `Aska::` just as Star
-Ocean 4 does. The value is **differential**, and it has already been collected
-once — question 13 read the shape of the 30 KB table out of the comparison
-between the two games. Same engine, one year and several SDK generations later:
-if the blob layout holds, it generalises; if it moves, the move is dated.
-
-**Rung 5 — AHSL, and this repository's own evidence against the first version
-of this rung.** It was written here as the speculative tail, on the reasoning
-that a development-kit cache is not a retail artifact and that "not present on
-the shipped media" would be the cheap answer. **That is already falsified by
-work in this repository.** AHSL caches ship:
-
-* [docs/formats/pkg.md](docs/formats/pkg.md) records
-  `USRDIR/shader/AHSLDiskCachePs3_*` on Star Ocean 5's PlayStation 3 package
-  — **30 files, 84 MB**, on retail media;
-* Resonance of Fate's executable names `AHSLDiskCacheXe`, so the Xbox 360
-  variant exists under a name of its own;
-* Anamnesis's `libSOA.so` carries 147 `AHSL` hits.
-
-And a sibling pipeline has already opened one. `android-talesofcrestoria-doc`
-reports the `AHA3` compiled-shader cache as **archive solved, cache header
-solved, payload not** — which is the same frontier this ladder is about,
-reached from the other side.
-
-The caveat that decides how much that transfers: **Crestoria is Android**, so
-its payload is not Xenos microcode and a disassembler written for rung 3 will
-not open it. What transfers is the **container** — how a cache frames its
-entries — not the instruction stream inside them.
-
-So the cheap probe is not "is AHSL real" but **does Infinite Undiscovery's own
-data carry an `AHA3` cache**. `aska.py` already holds `AHA3` as a signature, so
-that question is one run away, and §5's `e:\AHSLCacheUD4\` paths are a reason
-to expect the answer on the dev kit rather than the disc. A null is worth
-having either way, because it would separate the two.
-
-What AHSL expands to remains a guess; §5 says so and that should not quietly
-harden.
+* **What the record key encodes** — the permutation, presumably — and whether
+  it matches an ASF material's shader program block. That is question 4.
+* **The record hash at `+0x00`**, which is not the CRC-16 of the key.
+* **The cache header's mask at `+0x04`**, zeroed on creation and different in
+  most caches.
+* **Bit 4 of Star Ocean 4's `0x102A1111`** vertex magic.
+* **Resonance of Fate**, whose executable names `AHSLDiskCacheXe`: its disc
+  has no sector-aligned `AHSX`, which fits question 23 — its containers are
+  entropy 8.00 throughout, so a cache would be inside them.
+* **The two-operand scalar lane selection**, the one piece of the ALU the
+  disassembler prints raw.
 
 ## Beyond this game — answered, and what it left open
 
@@ -544,6 +520,7 @@ Android, 46 507 mangled symbols.
 * The engine in tri-Ace's other titles — [docs/aska-across-titles.md](docs/aska-across-titles.md)
 * PlayStation 3 packages — [docs/formats/pkg.md](docs/formats/pkg.md)
 * Disc layout and XDVDFS — [docs/formats/xdvdfs.md](docs/formats/xdvdfs.md)
+* Shaders: the AHSL caches, the fixed library, and the microcode — [docs/formats/shaders.md](docs/formats/shaders.md)
 * NORM/MRON containers — [docs/formats/norm-mron.md](docs/formats/norm-mron.md)
 * XEX2 and the decrypted executable — [docs/formats/xex.md](docs/formats/xex.md)
 * XDBF title metadata — [docs/formats/xdbf.md](docs/formats/xdbf.md)

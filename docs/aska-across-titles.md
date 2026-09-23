@@ -61,7 +61,7 @@ means the tools in this repository actually parsed the title's own data.
 | Radiata Stories, PS2 2005 | no | `SLZ` only | stored blocks only | 26 254 sound `SLZ` blocks |
 | Valkyrie Profile 2, PS2 2006 | no | `SLZ`, `DTT\0`, `LCTP` | `slz.py`, method 1 | 25 431 sound `SLZ` blocks |
 | Infinite Undiscovery, X360 2008 | `Aska::` + 1 740 RTTI names | *the baseline* | *the baseline* | — |
-| Star Ocean 4, X360 2009 | **`Aska::` in `SOZ.exe`** | `SLZ`, `PACK`, ASF, AAF, ACF, AIF, SNC, AAC | **yes, every one** | the namespace, then the readers |
+| Star Ocean 4, X360 2009 | **`Aska::` in `SOZ.exe`** | `SLZ`, `PACK`, ASF, AAF, ACF, AIF, SNC, AAC, `AHSX` | **yes, every one** | the namespace, then the readers |
 | Resonance of Fate, X360 2010 | no, RTTI stripped | `SLZ`/`SLE` and AIF headers in the executable | headers only | 182 sound `AAC ` containers |
 | Beyond the Labyrinth, 3DS 2012 | no | `P@CK` and the art naming | no | **nothing — the one specimen that says no** |
 | Phantasy Star Nova, Vita 2014 | not reachable | `disc1/fNNNNN.bin`, CRI `CPK` | no, second layer | the naming, and only that |
@@ -1284,3 +1284,35 @@ series, and this specimen's value to this document is that it is the first one
 where the *absence* is measured against a same-platform, same-publisher,
 same-genre positive fourteen months old.
 
+## 17. The shader cache, and a dictionary that did not change
+
+Session 19 read Infinite Undiscovery's compiled shaders — a fixed library and
+ten **AHSL disk caches**, magic `AHSX`, whose records are compressed with
+tri-Ace's halfword LZ77 against an 8 KB preset dictionary — and then pointed
+the same reader at Star Ocean 4. The specification is
+[formats/shaders.md](formats/shaders.md); §9 there has the comparison.
+
+Star Ocean 4 carries **two** caches, at version `0x0033.0x0000` where this game
+has `0x002E.0x0003`, with programs from compiler `2.0.7645.0`. All 11 679 of
+its distinct programs decode, parse, disassemble and read only registers their
+constant tables declare. And its dictionary is **the same 8 KB, byte for
+byte**, CRC `0xC2E6` in every record of both games.
+
+That places two things on the timeline this document has been building:
+
+* **The PlayStation 2 codec reached the Xbox 360.** `SLZ` method 3 arrived with
+  the PlayStation 2 by 2003 and was its default there
+  ([§11](#11-the-five-playstation-discs-1998-to-2006)); on the Xbox 360 the
+  `SLZ` wrapper holds XCompress instead. The halfword LZ77 did not go away: it
+  moved inside the shader cache, big-endian now, with a dictionary in front of
+  it. Twelve-bit distances counted in halfwords reach 8 190 bytes, and the
+  dictionary is 8 192.
+* **The dictionary is an engine asset.** It survives one game, one year and
+  several XDK releases untouched while the cache version around it moves from
+  46.3 to 51.0 — which is what an asset belonging to the engine rather than to
+  either title looks like.
+
+Resonance of Fate, whose executable names `AHSLDiskCacheXe`, shows no
+sector-aligned `AHSX` on its disc. That is the expected null rather than a
+negative: its containers are entropy 8.00 throughout (question 23), so a cache
+would be inside them.
